@@ -2,9 +2,9 @@
 
 declare(strict_types=1);
 
-namespace AiAccel;
+namespace Forja;
 
-use AiAccel\Generator\ModelResolver;
+use Forja\Generator\ModelResolver;
 
 final class Config
 {
@@ -36,7 +36,7 @@ final class Config
     ) {
     }
 
-    /** @param array<string, mixed> $values as returned by config/ai-accel.php */
+    /** @param array<string, mixed> $values as returned by config/forja.php */
     public static function fromArray(array $values): self
     {
         return new self(
@@ -66,7 +66,7 @@ final class Config
 
     public function lockPath(): string
     {
-        return $this->cacheDir . '/accel.lock.json';
+        return $this->cacheDir . '/forja.lock.json';
     }
 
     public function models(): ModelResolver

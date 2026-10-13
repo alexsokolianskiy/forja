@@ -9,15 +9,15 @@ static int64_t rotate(int64_t code, int64_t base, int64_t shift)
     return base + ((code - base + shift) % LETTERS + LETTERS) % LETTERS;
 }
 
-char *{{symbol}}(const char *s, size_t s_len, int64_t shift, int64_t *accel_len, int32_t *accel_err)
+char *{{symbol}}(const char *s, size_t s_len, int64_t shift, int64_t *forja_len, int32_t *forja_err)
 {
-    *accel_len = 0;
+    *forja_len = 0;
     if (s_len == 0) {
         return NULL;
     }
     char *out = malloc(s_len);
     if (out == NULL) {
-        *accel_err = 1;
+        *forja_err = 1;
         return NULL;
     }
     for (size_t i = 0; i < s_len; i++) {
@@ -30,6 +30,6 @@ char *{{symbol}}(const char *s, size_t s_len, int64_t shift, int64_t *accel_len,
             out[i] = (char) c;
         }
     }
-    *accel_len = (int64_t) s_len;
+    *forja_len = (int64_t) s_len;
     return out;
 }

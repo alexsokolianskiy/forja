@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace AiAccel\Build;
+namespace Forja\Build;
 
 /**
  * Index of built modules, keyed by "Class::method". Written by the compile

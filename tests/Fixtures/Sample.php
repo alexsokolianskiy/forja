@@ -2,10 +2,10 @@
 
 declare(strict_types=1);
 
-namespace AiAccel\Tests\Fixtures;
+namespace Forja\Tests\Fixtures;
 
-use AiAccel\Attributes\AccelerateToC;
-use AiAccel\Model;
+use Forja\Attributes\AccelerateToC;
+use Forja\Model;
 
 function userHelper(int $n): int
 {

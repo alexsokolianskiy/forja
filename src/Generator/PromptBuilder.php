@@ -2,10 +2,10 @@
 
 declare(strict_types=1);
 
-namespace AiAccel\Generator;
+namespace Forja\Generator;
 
-use AiAccel\Abi\Signature;
-use AiAccel\Parser\MethodSpec;
+use Forja\Abi\Signature;
+use Forja\Parser\MethodSpec;
 
 final class PromptBuilder
 {
@@ -32,9 +32,9 @@ final class PromptBuilder
           so PHP `$m[$i][$j]` is `m[i * m_cols + j]`. The caller guarantees every row has m_cols elements.
         - Inputs are read-only. To modify an array the way PHP modifies its by-value copy, copy it first.
         - A string or array result is returned as a buffer allocated with malloc; the caller frees it.
-          Store its size in `*accel_len` (bytes or elements), or in `*accel_rows` and `*accel_cols` for a matrix.
+          Store its size in `*forja_len` (bytes or elements), or in `*forja_rows` and `*forja_cols` for a matrix.
           An empty result may be returned as NULL with size 0.
-        - `int32_t *accel_err` is always the last parameter and is 0 on entry. Set `*accel_err = 1` and return
+        - `int32_t *forja_err` is always the last parameter and is 0 on entry. Set `*forja_err = 1` and return
           (0 or NULL, after freeing what you allocated) whenever you cannot produce PHP's exact result. The caller
           then runs the PHP method instead, so this is always safe. You MUST do this when:
             * PHP would raise a warning, error or exception: an index outside an array or string, division or
@@ -50,7 +50,7 @@ final class PromptBuilder
           `intdiv()` and `%` truncate toward zero. `**` on ints yields an int only if it does not overflow.
         - Evaluate floating-point expressions in the PHP source order. Do not reassociate, and do not use fma().
         - Integer-to-float and float-to-string conversions, comparison and rounding must follow PHP 8 rules;
-          if you are not certain of a rule, set `*accel_err = 1` for the inputs it affects.
+          if you are not certain of a rule, set `*forja_err = 1` for the inputs it affects.
         - String functions operate on bytes unless they are mb_* functions; treat mb_* as UNSUPPORTED.
         - Never read or write outside the bounds you were given, for any input whatsoever.
         PROMPT;

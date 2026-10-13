@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace AiAccel\Verify;
+namespace Forja\Verify;
 
 /**
  * Seeded random arguments for a parameter list. Ranges come from the

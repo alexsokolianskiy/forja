@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace AiAccel\FFI;
+namespace Forja\FFI;
 
 use FFI;
 

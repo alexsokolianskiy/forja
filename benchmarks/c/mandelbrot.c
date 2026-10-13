@@ -1,8 +1,8 @@
 #include <stdint.h>
 
-int64_t {{symbol}}(int64_t w, int64_t h, int64_t maxIter, int32_t *accel_err)
+int64_t {{symbol}}(int64_t w, int64_t h, int64_t maxIter, int32_t *forja_err)
 {
-    (void) accel_err;
+    (void) forja_err;
     int64_t total = 0;
     for (int64_t py = 0; py < h; py++) {
         double y0 = (double) py / (double) h * 2.0 - 1.0;

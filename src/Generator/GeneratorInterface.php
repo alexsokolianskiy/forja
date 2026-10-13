@@ -2,10 +2,10 @@
 
 declare(strict_types=1);
 
-namespace AiAccel\Generator;
+namespace Forja\Generator;
 
-use AiAccel\Abi\Signature;
-use AiAccel\Parser\MethodSpec;
+use Forja\Abi\Signature;
+use Forja\Parser\MethodSpec;
 
 interface GeneratorInterface
 {

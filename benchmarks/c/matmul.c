@@ -3,21 +3,21 @@
 #include <stdlib.h>
 
 double *{{symbol}}(const double *a, size_t a_rows, size_t a_cols, const double *b, size_t b_rows, size_t b_cols,
-                   int64_t *accel_rows, int64_t *accel_cols, int32_t *accel_err)
+                   int64_t *forja_rows, int64_t *forja_cols, int32_t *forja_err)
 {
-    *accel_rows = 0;
-    *accel_cols = 0;
+    *forja_rows = 0;
+    *forja_cols = 0;
     if (a_rows == 0) {
         return NULL;
     }
     /* PHP reads $b[$k][$j] for k < a_cols and j < b_cols; anything else is an undefined-index warning. */
     if (a_cols == 0 || b_cols == 0 || b_rows < a_cols) {
-        *accel_err = 1;
+        *forja_err = 1;
         return NULL;
     }
     double *out = malloc(a_rows * b_cols * sizeof(double));
     if (out == NULL) {
-        *accel_err = 1;
+        *forja_err = 1;
         return NULL;
     }
     for (size_t i = 0; i < a_rows; i++) {
@@ -29,7 +29,7 @@ double *{{symbol}}(const double *a, size_t a_rows, size_t a_cols, const double *
             out[i * b_cols + j] = sum;
         }
     }
-    *accel_rows = (int64_t) a_rows;
-    *accel_cols = (int64_t) b_cols;
+    *forja_rows = (int64_t) a_rows;
+    *forja_cols = (int64_t) b_cols;
     return out;
 }

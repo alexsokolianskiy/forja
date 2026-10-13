@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace AiAccel\Verify;
+namespace Forja\Verify;
 
 final class VerifyResult
 {

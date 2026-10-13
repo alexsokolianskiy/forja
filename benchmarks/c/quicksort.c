@@ -3,9 +3,9 @@
 #include <stdlib.h>
 #include <string.h>
 
-int64_t *{{symbol}}(const int64_t *a, size_t a_len, int64_t *accel_len, int32_t *accel_err)
+int64_t *{{symbol}}(const int64_t *a, size_t a_len, int64_t *forja_len, int32_t *forja_err)
 {
-    *accel_len = 0;
+    *forja_len = 0;
     if (a_len == 0) {
         return NULL;
     }
@@ -15,7 +15,7 @@ int64_t *{{symbol}}(const int64_t *a, size_t a_len, int64_t *accel_len, int32_t 
     if (out == NULL || stack == NULL) {
         free(out);
         free(stack);
-        *accel_err = 1;
+        *forja_err = 1;
         return NULL;
     }
     memcpy(out, a, a_len * sizeof(int64_t));
@@ -48,6 +48,6 @@ int64_t *{{symbol}}(const int64_t *a, size_t a_len, int64_t *accel_len, int32_t 
     }
 
     free(stack);
-    *accel_len = (int64_t) a_len;
+    *forja_len = (int64_t) a_len;
     return out;
 }

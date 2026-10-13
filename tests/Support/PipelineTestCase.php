@@ -2,20 +2,20 @@
 
 declare(strict_types=1);
 
-namespace AiAccel\Tests\Support;
+namespace Forja\Tests\Support;
 
-use AiAccel\Build\Builder;
-use AiAccel\Build\LockFile;
-use AiAccel\Build\Manifest;
-use AiAccel\Build\Publisher;
-use AiAccel\Compiler\CCompiler;
-use AiAccel\Config;
-use AiAccel\Generator\GeneratorInterface;
-use AiAccel\Generator\ModelResolver;
-use AiAccel\Parser\MethodExtractor;
-use AiAccel\Parser\MethodSpec;
-use AiAccel\Tests\Fixtures\Sample;
-use AiAccel\Verify\Verifier;
+use Forja\Build\Builder;
+use Forja\Build\LockFile;
+use Forja\Build\Manifest;
+use Forja\Build\Publisher;
+use Forja\Compiler\CCompiler;
+use Forja\Config;
+use Forja\Generator\GeneratorInterface;
+use Forja\Generator\ModelResolver;
+use Forja\Parser\MethodExtractor;
+use Forja\Parser\MethodSpec;
+use Forja\Tests\Fixtures\Sample;
+use Forja\Verify\Verifier;
 use PHPUnit\Framework\TestCase;
 
 abstract class PipelineTestCase extends TestCase
@@ -28,10 +28,10 @@ abstract class PipelineTestCase extends TestCase
 
     protected function setUp(): void
     {
-        $this->cacheDir = sys_get_temp_dir() . '/ai-accel-test-' . bin2hex(random_bytes(6));
+        $this->cacheDir = sys_get_temp_dir() . '/forja-test-' . bin2hex(random_bytes(6));
         $this->generator = new FixtureGenerator(dirname(__DIR__) . '/c');
         $this->manifest = new Manifest($this->cacheDir . '/manifest.json');
-        $this->locks = new LockFile($this->cacheDir . '/accel.lock.json');
+        $this->locks = new LockFile($this->cacheDir . '/forja.lock.json');
         $this->builder = $this->builder();
     }
 
@@ -98,7 +98,7 @@ abstract class PipelineTestCase extends TestCase
             [0 => ['pipe', 'r'], 1 => ['pipe', 'w'], 2 => ['pipe', 'w']],
             $pipes,
             null,
-            $env + ['AI_ACCEL_CACHE_DIR' => $this->cacheDir] + getenv()
+            $env + ['FORJA_CACHE_DIR' => $this->cacheDir] + getenv()
         );
         fwrite($pipes[0], json_encode($calls));
         fclose($pipes[0]);

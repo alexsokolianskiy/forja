@@ -9,7 +9,7 @@ ini_set('display_errors', 'stderr');
 
 $job = json_decode((string) stream_get_contents(STDIN), true, 512, JSON_THROW_ON_ERROR);
 require $job['autoload'];
-AiAccel\Runtime::enable(false); // the PHP side of the comparison must be the real PHP method
+Forja\Runtime::enable(false); // the PHP side of the comparison must be the real PHP method
 if (!class_exists($job['class'])) {
     require_once $job['sourceFile'];
 }
@@ -19,10 +19,10 @@ set_error_handler(static function (int $level, string $message, string $file, in
     throw new ErrorException($message, 0, $level, $file, $line);
 });
 
-$native = (new AiAccel\FFI\FFILoader())->load($job);
+$native = (new Forja\FFI\FFILoader())->load($job);
 $method = new ReflectionMethod($job['class'], $job['method']);
 $object = $method->isStatic() ? null : (new ReflectionClass($job['class']))->newInstanceWithoutConstructor();
-$inputs = new AiAccel\Verify\InputGenerator($job['seed'], $job['ranges'] ?? []);
+$inputs = new Forja\Verify\InputGenerator($job['seed'], $job['ranges'] ?? []);
 
 $report = ['ok' => true, 'checked' => 0, 'declined' => 0, 'phpErrors' => 0, 'firstPhpError' => null, 'failure' => null];
 for ($i = 0; $i < $job['iterations']; $i++) {
@@ -38,7 +38,7 @@ for ($i = 0; $i < $job['iterations']; $i++) {
     $declined = false;
     try {
         $actual = $native($args);
-    } catch (AiAccel\FFI\NativeException) {
+    } catch (Forja\FFI\NativeException) {
         $declined = true;
     } catch (Throwable $e) {
         $actual = get_class($e) . ': ' . $e->getMessage();
@@ -54,7 +54,7 @@ for ($i = 0; $i < $job['iterations']; $i++) {
         }
     } elseif ($declined) {
         $report['declined']++; // safe: the PHP method runs for this input
-    } elseif (!AiAccel\Verify\Comparator::same($expected, $actual)) {
+    } elseif (!Forja\Verify\Comparator::same($expected, $actual)) {
         $report['failure'] = ['args' => $args, 'expected' => $expected, 'actual' => $actual];
         break;
     } else {

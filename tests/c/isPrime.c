@@ -1,8 +1,8 @@
 #include <stdint.h>
 
-int32_t {{symbol}}(int64_t n, int32_t *accel_err)
+int32_t {{symbol}}(int64_t n, int32_t *forja_err)
 {
-    (void) accel_err;
+    (void) forja_err;
     if (n < 2) {
         return 0;
     }

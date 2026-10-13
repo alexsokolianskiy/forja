@@ -12,7 +12,7 @@ $isAnthropic = str_ends_with($path, '/v1/messages');
 
 $prompt = $isAnthropic ? $body['messages'][0]['content'] : $body['messages'][1]['content'];
 preg_match('/PHP method \([\w\\\\]+::(\w+)\)/', $prompt, $method);
-preg_match('/accel_[0-9a-f]{16}/', $prompt, $symbol);
+preg_match('/forja_[0-9a-f]{16}/', $prompt, $symbol);
 $code = str_replace('{{symbol}}', $symbol[0], (string) file_get_contents(dirname(__DIR__) . "/c/{$method[1]}.c"));
 
 file_put_contents((string) getenv('FAKE_LLM_LOG'), json_encode([

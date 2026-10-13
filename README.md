@@ -1,11 +1,11 @@
-# ai-c-accel
+# Forja
 
 Переводит PHP-методы в C с помощью модели (Claude по API или локальной), компилирует их и подменяет вызовы через Zend FFI. Вызывающий код не меняется. Всё, что перевести нельзя или не удалось проверить, продолжает работать как обычный PHP.
 
 ## Быстрый старт
 
 ```php
-use AiAccel\Attributes\AccelerateToC;
+use Forja\Attributes\AccelerateToC;
 
 final class Fractals
 {
@@ -18,7 +18,7 @@ final class Fractals
 ```
 
 ```bash
-vendor/bin/ai-c-compile
+vendor/bin/forja
 ```
 
 После этого `Fractals::mandelbrot(800, 600, 1000)` в любом месте приложения выполняет C-версию. Обёрток, прокси и регистрации в контейнере не нужно: пакет подключается через автозагрузчик Composer, поэтому работает одинаково в Laravel, Symfony и без фреймворка.
@@ -26,7 +26,7 @@ vendor/bin/ai-c-compile
 Для деплоя добавьте в `composer.json` приложения:
 
 ```json
-"scripts": { "post-install-cmd": ["ai-c-compile"] }
+"scripts": { "post-install-cmd": ["forja"] }
 ```
 
 ### Настройка PHP для веб-запросов
@@ -48,7 +48,7 @@ ffi.enable=1
 Модель записывается как `провайдер:модель`.
 
 ```php
-use AiAccel\Model;
+use Forja\Model;
 
 #[AccelerateToC]                                   // модель по умолчанию из конфига
 #[AccelerateToC(model: Model::OPUS)]               // Claude по API-ключу
@@ -60,7 +60,7 @@ use AiAccel\Model;
 На один запуск модель задаётся флагом, он перекрывает и конфиг, и атрибуты:
 
 ```bash
-vendor/bin/ai-c-compile --model=local
+vendor/bin/forja --model=local
 ```
 
 | Провайдер | Что это | Что нужно |
@@ -68,7 +68,7 @@ vendor/bin/ai-c-compile --model=local
 | `anthropic` | Claude через Messages API | `ANTHROPIC_API_KEY` |
 | `local` | Ollama, LM Studio, llama.cpp, vLLM — любой сервер с OpenAI-совместимым `/chat/completions` | запущенный сервер; ключ не нужен |
 
-Адрес локального сервера, модель по умолчанию, псевдонимы и дополнительные провайдеры (например, OpenRouter) настраиваются в `config/ai-accel.php`. Переменные окружения: `AI_ACCEL_MODEL`, `AI_ACCEL_LOCAL_URL`, `AI_ACCEL_LOCAL_MODEL`.
+Адрес локального сервера, модель по умолчанию, псевдонимы и дополнительные провайдеры (например, OpenRouter) настраиваются в `config/forja.php`. Переменные окружения: `FORJA_MODEL`, `FORJA_LOCAL_URL`, `FORJA_LOCAL_MODEL`.
 
 Локальные модели ошибаются чаще. Это безопасно: неверный перевод не проходит проверку и метод остаётся на PHP.
 
@@ -77,11 +77,11 @@ vendor/bin/ai-c-compile --model=local
 Когда сгенерированный C вас устраивает, его можно заморозить:
 
 ```bash
-vendor/bin/ai-c-compile --lock='App\Fractals::mandelbrot'
+vendor/bin/forja --lock='App\Fractals::mandelbrot'
 ```
 
 ```bash
-vendor/bin/ai-c-compile --lock
+vendor/bin/forja --lock
 ```
 
 Или сразу в атрибуте — тогда код замораживается при первой успешной проверке:
@@ -95,10 +95,10 @@ vendor/bin/ai-c-compile --lock
 Lock не отключает проверку. При каждой сборке замороженный C заново сравнивается с PHP-методом. Если вы изменили PHP так, что результаты разошлись, модуль получит статус `rejected` и метод будет работать на PHP, пока вы не поправите C или не снимете lock:
 
 ```bash
-vendor/bin/ai-c-compile --unlock='App\Fractals::mandelbrot'
+vendor/bin/forja --unlock='App\Fractals::mandelbrot'
 ```
 
-Замки хранятся в `storage/c_cache/accel.lock.json`. Коммитьте его вместе с `storage/c_cache/src/`.
+Замки хранятся в `storage/c_cache/forja.lock.json`. Коммитьте его вместе с `storage/c_cache/src/`.
 
 ## Что переводится
 
@@ -116,11 +116,11 @@ vendor/bin/ai-c-compile --unlock='App\Fractals::mandelbrot'
 ### Режим `--auto`
 
 ```bash
-vendor/bin/ai-c-compile --auto --dry-run
+vendor/bin/forja --auto --dry-run
 ```
 
 ```bash
-vendor/bin/ai-c-compile --auto
+vendor/bin/forja --auto
 ```
 
 `--auto` берёт все методы с циклом, которые целиком укладываются в правила выше, даже без атрибута. `--dry-run` показывает список и не вызывает модель — посмотрите его до первого запуска, чтобы оценить число запросов. Постоянно режим включается ключом `auto` в конфиге.
@@ -130,19 +130,19 @@ vendor/bin/ai-c-compile --auto
 1. **Прототип выводится из PHP-типов**, а не берётся у модели: заголовок FFI всегда совпадает с тем, что передаёт PHP.
 2. **Проверка кода до компиляции.** Разрешён короткий список заголовков; `system`, `fork`, `fopen`, сокеты, inline asm отклоняются. Это список запретов, не песочница — ревьюйте `src/*.c`.
 3. **Дифференциальный тест в отдельном процессе.** 1000 входов (границы диапазонов и случайные), сравнение с PHP. Segfault убивает только дочерний процесс; такой модуль никогда не загружается. `try/catch` от segfault не спасает, поэтому проверка вынесена из рабочего процесса.
-4. **Канал отказа.** У каждой C-функции есть параметр `accel_err`. Там, где PHP бросил бы исключение или предупреждение (деление на ноль, выход за границы, переполнение `int`), C обязан отказаться, и выполняется PHP-метод — вызывающий получает настоящее PHP-исключение. Перевод, который возвращает значение там, где PHP падает, не проходит проверку.
+4. **Канал отказа.** У каждой C-функции есть параметр `forja_err`. Там, где PHP бросил бы исключение или предупреждение (деление на ноль, выход за границы, переполнение `int`), C обязан отказаться, и выполняется PHP-метод — вызывающий получает настоящее PHP-исключение. Перевод, который возвращает значение там, где PHP падает, не проходит проверку.
 5. **Валидация аргументов на каждом вызове.** Не тот тип, не список, строка в `int[]`, непрямоугольная матрица — в C ничего не уходит.
 6. **Устаревание.** Если PHP-файл изменён после сборки, загружается оригинал.
-7. **Аварийный выключатель.** `AI_ACCEL_DISABLE=1` или `AiAccel\Runtime::enable(false)`.
+7. **Аварийный выключатель.** `FORJA_DISABLE=1` или `Forja\Runtime::enable(false)`.
 
-Логи: `AiAccel\Runtime::configure(logger: $psrLogger)` один раз при старте приложения.
+Логи: `Forja\Runtime::configure(logger: $psrLogger)` один раз при старте приложения.
 
 ## Как работает подмена
 
-`ai-c-compile` кладёт в `storage/c_cache/php/` копию каждого файла с ускоренными методами. Копия отличается от оригинала одной вставкой после открывающей скобки метода:
+`forja` кладёт в `storage/c_cache/php/` копию каждого файла с ускоренными методами. Копия отличается от оригинала одной вставкой после открывающей скобки метода:
 
 ```php
-if (($__accel = \AiAccel\Runtime::native('App\Fractals::mandelbrot')) !== null) { try { return $__accel([$w, $h, $maxIter]); } catch (\Throwable $__accelError) { \AiAccel\Runtime::failed(...); } }
+if (($__forja = \Forja\Runtime::native('App\Fractals::mandelbrot')) !== null) { try { return $__forja([$w, $h, $maxIter]); } catch (\Throwable $__forjaError) { \Forja\Runtime::failed(...); } }
 ```
 
 Автозагрузчик пакета отдаёт эту копию вместо оригинала. Если нативный вызов невозможен, выполнение продолжается в исходное тело метода — оно и есть fallback. Номера строк, `__FILE__` и `__DIR__` сохраняются. Файлы, подключённые через `require` в обход автозагрузки, не ускоряются.
@@ -150,14 +150,14 @@ if (($__accel = \AiAccel\Runtime::native('App\Fractals::mandelbrot')) !== null) 
 ## Команда
 
 ```
-ai-c-compile [пути...] [--model=ИМЯ] [--auto] [--dry-run]
+forja [пути...] [--model=ИМЯ] [--auto] [--dry-run]
              [--lock[=Класс::метод]] [--unlock[=Класс::метод]]
              [--force] [--no-verify] [--strict] [--status] [--config=ФАЙЛ]
 ```
 
 Статусы: `verified` (работает на C), `rejected` (не прошёл проверку), `failed` (ошибка генерации или компиляции), `unsupported` (нельзя перевести), `unverified` (собран с `--no-verify`). Без `--strict` команда всегда завершается с кодом 0: неудачный модуль — это метод, оставшийся на PHP, а не сорванный деплой.
 
-Что коммитить из `storage/c_cache/`: `src/` и `accel.lock.json`. Остальное (`lib/`, `php/`, `manifest.json`, `runtime.php`, `preload.php`) собирается на каждой машине. С закоммиченным `src/` деплой не обращается к модели: только компиляция и проверка.
+Что коммитить из `storage/c_cache/`: `src/` и `forja.lock.json`. Остальное (`lib/`, `php/`, `manifest.json`, `runtime.php`, `preload.php`) собирается на каждой машине. С закоммиченным `src/` деплой не обращается к модели: только компиляция и проверка.
 
 ## Ограничения
 

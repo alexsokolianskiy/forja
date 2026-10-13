@@ -11,8 +11,8 @@ foreach ([__DIR__ . '/../vendor/autoload.php', __DIR__ . '/../../../autoload.php
 }
 
 try {
-    exit((new AiAccel\Console\CompileCommand())->run(array_slice($argv, 1)));
+    exit((new Forja\Console\CompileCommand())->run(array_slice($argv, 1)));
 } catch (Throwable $e) {
-    fwrite(STDERR, 'ai-c-compile: ' . $e->getMessage() . "\n");
+    fwrite(STDERR, 'forja: ' . $e->getMessage() . "\n");
     exit(2);
 }

@@ -2,24 +2,24 @@
 
 declare(strict_types=1);
 
-namespace AiAccel\Console;
+namespace Forja\Console;
 
-use AiAccel\Build\Builder;
-use AiAccel\Build\LockFile;
-use AiAccel\Build\Manifest;
-use AiAccel\Build\Publisher;
-use AiAccel\Compiler\CCompiler;
-use AiAccel\Config;
-use AiAccel\FFI\FFILoader;
-use AiAccel\Generator\GeneratorInterface;
-use AiAccel\Generator\ModelRouter;
-use AiAccel\Parser\MethodExtractor;
-use AiAccel\Verify\Verifier;
+use Forja\Build\Builder;
+use Forja\Build\LockFile;
+use Forja\Build\Manifest;
+use Forja\Build\Publisher;
+use Forja\Compiler\CCompiler;
+use Forja\Config;
+use Forja\FFI\FFILoader;
+use Forja\Generator\GeneratorInterface;
+use Forja\Generator\ModelRouter;
+use Forja\Parser\MethodExtractor;
+use Forja\Verify\Verifier;
 
 final class CompileCommand
 {
     private const USAGE = <<<'TXT'
-        Usage: ai-c-compile [paths...] [options]
+        Usage: forja [paths...] [options]
 
           paths              Files or directories to scan (default: `paths` from the config)
 
@@ -44,7 +44,7 @@ final class CompileCommand
           --no-verify        Skip the differential test and use the modules untested
           --strict           Exit with status 1 unless every attributed method ends up accelerated
           --status           Print the last build's results and exit
-          --config=FILE      Config file (default: ./config/ai-accel.php, then the package default)
+          --config=FILE      Config file (default: ./config/forja.php, then the package default)
 
         TXT;
 
@@ -196,14 +196,14 @@ final class CompileCommand
             }
         }
         $manifest->save();
-        fwrite($this->out, $changed ? '' : ($unlock ? "Nothing is locked.\n" : "Nothing verified to lock. Run ai-c-compile first.\n"));
+        fwrite($this->out, $changed ? '' : ($unlock ? "Nothing is locked.\n" : "Nothing verified to lock. Run forja first.\n"));
 
         return 0;
     }
 
     private function configFile(?string $explicit): string
     {
-        foreach ([$explicit, getcwd() . '/config/ai-accel.php', dirname(__DIR__, 2) . '/config/ai-accel.php'] as $candidate) {
+        foreach ([$explicit, getcwd() . '/config/forja.php', dirname(__DIR__, 2) . '/config/forja.php'] as $candidate) {
             if ($candidate !== null && is_file($candidate)) {
                 return $candidate;
             }

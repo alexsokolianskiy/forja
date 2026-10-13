@@ -2,18 +2,18 @@
 
 declare(strict_types=1);
 
-namespace AiAccel\Tests;
+namespace Forja\Tests;
 
-use AiAccel\Abi\Signature;
-use AiAccel\Build\Transformer;
-use AiAccel\Generator\CodeSanitizer;
-use AiAccel\Generator\GenerationException;
-use AiAccel\Generator\ModelResolver;
-use AiAccel\Generator\ReplyParser;
-use AiAccel\Model;
-use AiAccel\Parser\MethodExtractor;
-use AiAccel\Parser\MethodSpec;
-use AiAccel\Tests\Fixtures\Sample;
+use Forja\Abi\Signature;
+use Forja\Build\Transformer;
+use Forja\Generator\CodeSanitizer;
+use Forja\Generator\GenerationException;
+use Forja\Generator\ModelResolver;
+use Forja\Generator\ReplyParser;
+use Forja\Model;
+use Forja\Parser\MethodExtractor;
+use Forja\Parser\MethodSpec;
+use Forja\Tests\Fixtures\Sample;
 use PHPUnit\Framework\TestCase;
 
 final class ExtractorTest extends TestCase
@@ -103,17 +103,17 @@ final class ExtractorTest extends TestCase
     {
         $specs = $this->specs();
         $proto = static fn (string $method): string => Signature::fromSpec($specs[$method], str_repeat('ab', 32))->prototype();
-        $s = 'accel_abababababababab';
+        $s = 'forja_abababababababab';
 
-        self::assertSame("double $s(const double *a, size_t a_len, const double *b, size_t b_len, int32_t *accel_err);", $proto('dot'));
-        self::assertSame("int64_t *$s(const int64_t *xs, size_t xs_len, int64_t k, int64_t *accel_len, int32_t *accel_err);", $proto('scale'));
-        self::assertSame("char *$s(const char *s, size_t s_len, int64_t shift, int64_t *accel_len, int32_t *accel_err);", $proto('caesar'));
-        self::assertSame("int64_t *$s(const int64_t *m, size_t m_rows, size_t m_cols, int64_t *accel_rows, int64_t *accel_cols, int32_t *accel_err);", $proto('transpose'));
-        self::assertSame("int32_t $s(int64_t n, int32_t *accel_err);", $proto('isPrime'));
-        self::assertSame("void $s(int64_t n, int32_t *accel_err);", $proto('touch'));
+        self::assertSame("double $s(const double *a, size_t a_len, const double *b, size_t b_len, int32_t *forja_err);", $proto('dot'));
+        self::assertSame("int64_t *$s(const int64_t *xs, size_t xs_len, int64_t k, int64_t *forja_len, int32_t *forja_err);", $proto('scale'));
+        self::assertSame("char *$s(const char *s, size_t s_len, int64_t shift, int64_t *forja_len, int32_t *forja_err);", $proto('caesar'));
+        self::assertSame("int64_t *$s(const int64_t *m, size_t m_rows, size_t m_cols, int64_t *forja_rows, int64_t *forja_cols, int32_t *forja_err);", $proto('transpose'));
+        self::assertSame("int32_t $s(int64_t n, int32_t *forja_err);", $proto('isPrime'));
+        self::assertSame("void $s(int64_t n, int32_t *forja_err);", $proto('touch'));
 
         $keyword = new Signature('f', [['name' => 'int', 'kind' => 'int'], ['name' => 'default', 'kind' => 'string']], 'int');
-        self::assertSame('int64_t f(int64_t int_, const char *default_, size_t default__len, int32_t *accel_err);', $keyword->prototype());
+        self::assertSame('int64_t f(int64_t int_, const char *default_, size_t default__len, int32_t *forja_err);', $keyword->prototype());
     }
 
     public function testModelNamesResolveToProviderAndModel(): void
@@ -178,12 +178,12 @@ final class ExtractorTest extends TestCase
         self::assertSame([Sample::class], $result['classes']);
         self::assertCount(2, $result['guarded']);
         self::assertSame(substr_count($code, "\n"), substr_count($result['code'], "\n"));
-        self::assertStringContainsString("Runtime::native('AiAccel\\\\Tests\\\\Fixtures\\\\Sample::sumSquares')) !== null) { try { return \$__accel([\$n]); }", $result['code']);
-        self::assertStringContainsString('{ try { $__accel([$n]); return; }', $result['code']);
+        self::assertStringContainsString("Runtime::native('Forja\\\\Tests\\\\Fixtures\\\\Sample::sumSquares')) !== null) { try { return \$__forja([\$n]); }", $result['code']);
+        self::assertStringContainsString('{ try { $__forja([$n]); return; }', $result['code']);
         self::assertStringContainsString('return ' . var_export($file, true) . " . '|' . " . var_export(dirname($file), true), $result['code']);
 
         // Removing the guards and restoring the magic constants gives back the original file.
-        $restored = preg_replace('/ if \(\(\$__accel = .*? \} \}/', '', $result['code']);
+        $restored = preg_replace('/ if \(\(\$__forja = .*? \} \}/', '', $result['code']);
         $restored = str_replace([var_export($file, true), var_export(dirname($file), true)], ['__FILE__', '__DIR__'], (string) $restored);
         self::assertSame($code, $restored);
     }

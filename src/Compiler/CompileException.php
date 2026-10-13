@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace AiAccel\Compiler;
+namespace Forja\Compiler;
 
 final class CompileException extends \RuntimeException
 {

@@ -2,9 +2,9 @@
 
 declare(strict_types=1);
 
-namespace AiAccel\Parser;
+namespace Forja\Parser;
 
-use AiAccel\Attributes\AccelerateToC;
+use Forja\Attributes\AccelerateToC;
 use PhpParser\ConstExprEvaluator;
 use PhpParser\Node;
 use PhpParser\Node\Expr;

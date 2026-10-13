@@ -2,12 +2,12 @@
 
 declare(strict_types=1);
 
-namespace AiAccel\Tests\Support;
+namespace Forja\Tests\Support;
 
-use AiAccel\Abi\Signature;
-use AiAccel\Generator\GenerationException;
-use AiAccel\Generator\GeneratorInterface;
-use AiAccel\Parser\MethodSpec;
+use Forja\Abi\Signature;
+use Forja\Generator\GenerationException;
+use Forja\Generator\GeneratorInterface;
+use Forja\Parser\MethodSpec;
 
 /**
  * Stands in for the model: serves hand-written C from <dir>/<method>.c,

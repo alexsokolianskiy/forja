@@ -2,11 +2,11 @@
 
 declare(strict_types=1);
 
-namespace AiAccel\Tests;
+namespace Forja\Tests;
 
-use AiAccel\Console\CompileCommand;
-use AiAccel\Tests\Fixtures\Sample;
-use AiAccel\Tests\Support\PipelineTestCase;
+use Forja\Console\CompileCommand;
+use Forja\Tests\Fixtures\Sample;
+use Forja\Tests\Support\PipelineTestCase;
 
 final class CliTest extends PipelineTestCase
 {
@@ -85,7 +85,7 @@ final class CliTest extends PipelineTestCase
     public function testLockAndUnlockCommands(): void
     {
         $key = Sample::class . '::sumSquares';
-        self::assertSame("Nothing verified to lock. Run ai-c-compile first.\n", $this->cli('--lock')[1]);
+        self::assertSame("Nothing verified to lock. Run forja first.\n", $this->cli('--lock')[1]);
 
         $this->cli($this->sampleFile());
         $calls = $this->generator->calls;
@@ -93,13 +93,13 @@ final class CliTest extends PipelineTestCase
         [$exit, $out] = $this->cli("--lock=$key");
         self::assertSame(0, $exit);
         self::assertSame("LOCKED      $key\n", $out);
-        self::assertSame([1, "AiAccel\\Tests\\Fixtures\\Sample::wrong is rejected, only verified code can be locked\n"], $this->cli('--lock=' . Sample::class . '::wrong'));
+        self::assertSame([1, "Forja\\Tests\\Fixtures\\Sample::wrong is rejected, only verified code can be locked\n"], $this->cli('--lock=' . Sample::class . '::wrong'));
 
         // Locked: a forced rebuild with another model regenerates everything except this method.
         [, $out] = $this->cli('--force', '--model=fast');
         self::assertMatchesRegularExpression('/VERIFIED    .*Sample::sumSquares \(cached, locked\)\n\s+\[anthropic:claude-sonnet-5-5\]/', $out);
         self::assertMatchesRegularExpression('/VERIFIED    .*Sample::dot\n\s+\[local:tiny\]/', $out);
-        self::assertStringContainsString('sumSquares', (string) file_get_contents($this->cacheDir . '/accel.lock.json'));
+        self::assertStringContainsString('sumSquares', (string) file_get_contents($this->cacheDir . '/forja.lock.json'));
         $regenerated = $this->generator->calls - $calls;
 
         [, $out] = $this->cli('--status');

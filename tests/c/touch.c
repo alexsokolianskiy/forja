@@ -1,7 +1,7 @@
 #include <stdint.h>
 
-void {{symbol}}(int64_t n, int32_t *accel_err)
+void {{symbol}}(int64_t n, int32_t *forja_err)
 {
     (void) n;
-    (void) accel_err;
+    (void) forja_err;
 }

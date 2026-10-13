@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace AiAccel\Attributes;
+namespace Forja\Attributes;
 
 use Attribute;
 
@@ -21,7 +21,7 @@ use Attribute;
 final class AccelerateToC
 {
     /**
-     * @param string|null $model  "provider:model", a config alias, or an AiAccel\Model constant;
+     * @param string|null $model  "provider:model", a config alias, or an Forja\Model constant;
      *                            null uses `default_model` from the config.
      * @param bool $deterministic Reuse the cached C source for an unchanged method instead of regenerating it.
      * @param array<string, array{0: int|float, 1: int|float}> $ranges

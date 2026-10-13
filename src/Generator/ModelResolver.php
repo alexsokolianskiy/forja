@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace AiAccel\Generator;
+namespace Forja\Generator;
 
 /**
  * Turns what a developer writes in `model:` into a canonical "provider:model".

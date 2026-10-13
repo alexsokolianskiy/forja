@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace AiAccel\Generator;
+namespace Forja\Generator;
 
 /**
  * Tripwire for generated C before it is compiled and loaded into the PHP

@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace AiAccel\Generator;
+namespace Forja\Generator;
 
 final class ReplyParser
 {

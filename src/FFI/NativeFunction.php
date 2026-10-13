@@ -2,9 +2,9 @@
 
 declare(strict_types=1);
 
-namespace AiAccel\FFI;
+namespace Forja\FFI;
 
-use AiAccel\Abi\Signature;
+use Forja\Abi\Signature;
 use FFI;
 
 /**

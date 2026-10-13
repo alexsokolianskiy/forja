@@ -2,10 +2,10 @@
 
 declare(strict_types=1);
 
-namespace AiAccel\Fallback;
+namespace Forja\Fallback;
 
-use AiAccel\FFI\MarshalException;
-use AiAccel\FFI\NativeException;
+use Forja\FFI\MarshalException;
+use Forja\FFI\NativeException;
 use Psr\Log\LoggerInterface;
 use Psr\Log\NullLogger;
 
@@ -40,7 +40,7 @@ final class FallbackHandler
     public function disable(string $key, string $reason): void
     {
         $this->disabled[$key] = true;
-        $this->logger->warning('ai-accel: {key} disabled, using PHP: {reason}', ['key' => $key, 'reason' => $reason]);
+        $this->logger->warning('forja: {key} disabled, using PHP: {reason}', ['key' => $key, 'reason' => $reason]);
     }
 
     public function attempted(): void
@@ -55,9 +55,9 @@ final class FallbackHandler
 
         if ($error instanceof NativeException) {
             // Routine: the C code met an input it must not handle (PHP raises an error there, an int overflowed...).
-            $this->logger->debug('ai-accel: {key} ran as PHP: {reason}', ['key' => $key, 'reason' => $error->getMessage()]);
+            $this->logger->debug('forja: {key} ran as PHP: {reason}', ['key' => $key, 'reason' => $error->getMessage()]);
         } elseif ($error instanceof MarshalException) {
-            $this->logger->notice('ai-accel: {key} ran as PHP: {reason}', ['key' => $key, 'reason' => $error->getMessage()]);
+            $this->logger->notice('forja: {key} ran as PHP: {reason}', ['key' => $key, 'reason' => $error->getMessage()]);
         } else {
             $this->disable($key, get_class($error) . ': ' . $error->getMessage());
         }

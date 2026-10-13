@@ -2,13 +2,13 @@
 
 declare(strict_types=1);
 
-namespace AiAccel\Tests;
+namespace Forja\Tests;
 
-use AiAccel\Build\Manifest;
-use AiAccel\Generator\GenerationException;
-use AiAccel\Generator\ModelRouter;
-use AiAccel\Tests\Support\PipelineTestCase;
-use AiAccel\Tests\Support\Server;
+use Forja\Build\Manifest;
+use Forja\Generator\GenerationException;
+use Forja\Generator\ModelRouter;
+use Forja\Tests\Support\PipelineTestCase;
+use Forja\Tests\Support\Server;
 
 /**
  * The real HTTP drivers against a local stand-in for the model servers.
@@ -24,7 +24,7 @@ final class ProviderTest extends PipelineTestCase
     protected function setUp(): void
     {
         parent::setUp();
-        $this->log = sys_get_temp_dir() . '/ai-accel-llm-' . bin2hex(random_bytes(6)) . '.log';
+        $this->log = sys_get_temp_dir() . '/forja-llm-' . bin2hex(random_bytes(6)) . '.log';
         $this->server = new Server(__DIR__ . '/Support/fake-llm.php', [], ['FAKE_LLM_LOG' => $this->log]);
         $this->providers = [
             'anthropic' => ['driver' => 'anthropic', 'api_key' => 'test-key', 'base_url' => $this->server->url, 'default_model' => 'claude-sonnet-5-5'],
@@ -102,6 +102,6 @@ final class ProviderTest extends PipelineTestCase
         self::assertStringContainsString('request to http://127.0.0.1:9/v1/chat/completions failed', $down['message']);
 
         $this->expectException(GenerationException::class);
-        $router->generate($this->spec('sumSquares'), \AiAccel\Abi\Signature::fromSpec($this->spec('sumSquares'), str_repeat('a', 64)), 'nowhere:model');
+        $router->generate($this->spec('sumSquares'), \Forja\Abi\Signature::fromSpec($this->spec('sumSquares'), str_repeat('a', 64)), 'nowhere:model');
     }
 }

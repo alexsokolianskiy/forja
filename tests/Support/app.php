@@ -5,8 +5,8 @@ declare(strict_types=1);
 // A minimal "application": calls Sample methods the ordinary way and reports
 // what happened. Used from the CLI and behind PHP's built-in web server.
 
-use AiAccel\Runtime;
-use AiAccel\Tests\Fixtures\Sample;
+use Forja\Runtime;
+use Forja\Tests\Fixtures\Sample;
 
 require dirname(__DIR__, 2) . '/vendor/autoload.php';
 

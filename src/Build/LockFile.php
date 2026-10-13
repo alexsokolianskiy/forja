@@ -2,10 +2,10 @@
 
 declare(strict_types=1);
 
-namespace AiAccel\Build;
+namespace Forja\Build;
 
 /**
- * accel.lock.json: methods whose C source is frozen.
+ * forja.lock.json: methods whose C source is frozen.
  *
  * A locked method is never sent to a model again, whatever happens to the
  * default model, the prompt or --force. Its C file may also be tuned by hand.

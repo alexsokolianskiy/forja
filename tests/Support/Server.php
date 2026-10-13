@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace AiAccel\Tests\Support;
+namespace Forja\Tests\Support;
 
 /**
  * PHP's built-in web server as a child process, on a free local port.

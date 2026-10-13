@@ -2,9 +2,9 @@
 
 declare(strict_types=1);
 
-namespace AiAccel\Benchmarks;
+namespace Forja\Benchmarks;
 
-use AiAccel\Attributes\AccelerateToC;
+use Forja\Attributes\AccelerateToC;
 
 final class Kernels
 {

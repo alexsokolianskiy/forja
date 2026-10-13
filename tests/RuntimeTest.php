@@ -2,12 +2,12 @@
 
 declare(strict_types=1);
 
-namespace AiAccel\Tests;
+namespace Forja\Tests;
 
-use AiAccel\Build\Manifest;
-use AiAccel\Tests\Fixtures\Sample;
-use AiAccel\Tests\Support\PipelineTestCase;
-use AiAccel\Tests\Support\Server;
+use Forja\Build\Manifest;
+use Forja\Tests\Fixtures\Sample;
+use Forja\Tests\Support\PipelineTestCase;
+use Forja\Tests\Support\Server;
 
 /**
  * End to end: a separate PHP process calls Sample::method() the ordinary way,
@@ -80,7 +80,7 @@ final class RuntimeTest extends PipelineTestCase
 
         $run = $this->runApp([
             ['average', [10, 3]],
-            ['average', [10, 0]],            // PHP throws; C sets accel_err; the caller sees the PHP exception
+            ['average', [10, 0]],            // PHP throws; C sets forja_err; the caller sees the PHP exception
             ['sumSquares', [4000000]],       // overflows int64: PHP's own TypeError, not a wrapped-around number
             ['sumSquares', ['many']],        // wrong scalar type: PHP's own TypeError
         ]);
@@ -117,7 +117,7 @@ final class RuntimeTest extends PipelineTestCase
 
         self::assertSame(385, $run['results'][0]['value']);
         self::assertSame(['native' => 0, 'fallback' => 0], $run['stats']);
-        self::assertStringContainsString('file changed since the last ai-c-compile run', $run['logs'][0]);
+        self::assertStringContainsString('file changed since the last forja run', $run['logs'][0]);
     }
 
     public function testMissingLibraryAndKillSwitch(): void
@@ -125,7 +125,7 @@ final class RuntimeTest extends PipelineTestCase
         $entry = $this->build('sumSquares');
         $this->publish();
 
-        $off = $this->runApp([['sumSquares', [10]]], ['AI_ACCEL_DISABLE' => '1']);
+        $off = $this->runApp([['sumSquares', [10]]], ['FORJA_DISABLE' => '1']);
         self::assertSame(385, $off['results'][0]['value']);
         self::assertSame(['native' => 0, 'fallback' => 0], $off['stats']);
 
@@ -144,7 +144,7 @@ final class RuntimeTest extends PipelineTestCase
         $this->publish();
         $calls = json_encode([['sumSquares', [10]], ['caesar', ['abc', 1]]]);
         $app = dirname(__DIR__) . '/tests/Support/app.php';
-        $env = ['AI_ACCEL_CACHE_DIR' => $this->cacheDir];
+        $env = ['FORJA_CACHE_DIR' => $this->cacheDir];
 
         // PHP's default: FFI only from preloaded code. Nothing is preloaded, so PHP runs and says why.
         $default = json_decode((new Server($app, ['ffi.enable=preload'], $env))->post($calls), true);

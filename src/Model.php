@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace AiAccel;
+namespace Forja;
 
 /**
  * Shorthand for the `model:` argument of #[AccelerateToC].

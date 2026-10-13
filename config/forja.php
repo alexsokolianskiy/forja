@@ -2,12 +2,12 @@
 
 declare(strict_types=1);
 
-use AiAccel\Model;
+use Forja\Model;
 
 return [
-    // Which model writes the C. "provider:model", an alias from below, or an AiAccel\Model constant.
-    // #[AccelerateToC(model: ...)] overrides it per method, `ai-c-compile --model=...` for one run.
-    'default_model' => getenv('AI_ACCEL_MODEL') ?: Model::SONNET,
+    // Which model writes the C. "provider:model", an alias from below, or an Forja\Model constant.
+    // #[AccelerateToC(model: ...)] overrides it per method, `forja --model=...` for one run.
+    'default_model' => getenv('FORJA_MODEL') ?: Model::SONNET,
 
     // Your own names for models: #[AccelerateToC(model: 'fast')]
     'aliases' => [
@@ -27,18 +27,18 @@ return [
         // llama.cpp server, vLLM... anything with an OpenAI-compatible /chat/completions. No key needed.
         'local' => [
             'driver' => 'openai',
-            'base_url' => getenv('AI_ACCEL_LOCAL_URL') ?: 'http://localhost:11434/v1',
+            'base_url' => getenv('FORJA_LOCAL_URL') ?: 'http://localhost:11434/v1',
             'api_key' => null,
-            'default_model' => getenv('AI_ACCEL_LOCAL_MODEL') ?: 'qwen2.5-coder:14b',
+            'default_model' => getenv('FORJA_LOCAL_MODEL') ?: 'qwen2.5-coder:14b',
         ],
 
         // Any other OpenAI-compatible service works the same way:
         // 'openrouter' => ['driver' => 'openai', 'base_url' => 'https://openrouter.ai/api/v1', 'api_key' => getenv('OPENROUTER_API_KEY')],
     ],
 
-    // Generated C (src/) and accel.lock.json belong in version control; lib/, php/, manifest.json,
-    // runtime.php and preload.php are rebuilt on every machine. Override with AI_ACCEL_CACHE_DIR.
-    'cache_dir' => AiAccel\Runtime::defaultCacheDir(),
+    // Generated C (src/) and forja.lock.json belong in version control; lib/, php/, manifest.json,
+    // runtime.php and preload.php are rebuilt on every machine. Override with FORJA_CACHE_DIR.
+    'cache_dir' => Forja\Runtime::defaultCacheDir(),
 
     'compiler' => getenv('CC') ?: 'cc',
 
@@ -46,7 +46,7 @@ return [
     // differently from PHP. For the same reason, do not add -ffast-math.
     'cflags' => ['-O3', '-std=c11', '-ffp-contract=off'],
 
-    // Directories scanned by `vendor/bin/ai-c-compile` when no path is given.
+    // Directories scanned by `vendor/bin/forja` when no path is given.
     'paths' => ['app', 'src'],
 
     // true: also translate every method that has a loop and is fully translatable, without an attribute.

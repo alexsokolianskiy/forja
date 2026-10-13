@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace AiAccel\Compiler;
+namespace Forja\Compiler;
 
 /**
  * Builds a shared library from a C source file with the system compiler.

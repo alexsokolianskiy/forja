@@ -1,5 +1,5 @@
 {
-    "name": "aiaccel/php-c-accelerator",
+    "name": "alexsokolianskiy/forja",
     "description": "Translate hot PHP methods to C with an LLM (Claude or a local model), compile them and call them through FFI, with verified fallback to the original PHP.",
     "type": "library",
     "license": "MIT",
@@ -16,7 +16,7 @@
     },
     "autoload": {
         "psr-4": {
-            "AiAccel\\": "src/"
+            "Forja\\": "src/"
         },
         "files": [
             "src/bootstrap.php"
@@ -24,12 +24,12 @@
     },
     "autoload-dev": {
         "psr-4": {
-            "AiAccel\\Tests\\": "tests/",
-            "AiAccel\\Benchmarks\\": "benchmarks/"
+            "Forja\\Tests\\": "tests/",
+            "Forja\\Benchmarks\\": "benchmarks/"
         }
     },
     "bin": [
-        "bin/ai-c-compile"
+        "bin/forja"
     ],
     "scripts": {
         "test": "phpunit",

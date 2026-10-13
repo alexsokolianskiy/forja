@@ -11,19 +11,19 @@ declare(strict_types=1);
 // With --model, or with ANTHROPIC_API_KEY set, the C is written by that model.
 // Otherwise the hand-written reference translations in benchmarks/c/ are used.
 
-use AiAccel\Benchmarks\Kernels;
-use AiAccel\Build\Builder;
-use AiAccel\Build\LockFile;
-use AiAccel\Build\Manifest;
-use AiAccel\Build\Publisher;
-use AiAccel\Compiler\CCompiler;
-use AiAccel\Config;
-use AiAccel\Generator\ModelRouter;
-use AiAccel\Parser\MethodExtractor;
-use AiAccel\Runtime;
-use AiAccel\Tests\Support\FixtureGenerator;
-use AiAccel\Verify\Comparator;
-use AiAccel\Verify\Verifier;
+use Forja\Benchmarks\Kernels;
+use Forja\Build\Builder;
+use Forja\Build\LockFile;
+use Forja\Build\Manifest;
+use Forja\Build\Publisher;
+use Forja\Compiler\CCompiler;
+use Forja\Config;
+use Forja\Generator\ModelRouter;
+use Forja\Parser\MethodExtractor;
+use Forja\Runtime;
+use Forja\Tests\Support\FixtureGenerator;
+use Forja\Verify\Comparator;
+use Forja\Verify\Verifier;
 
 require dirname(__DIR__) . '/vendor/autoload.php';
 
@@ -102,7 +102,7 @@ foreach ($argv as $arg) {
         $model = substr($arg, 8);
     }
 }
-$config = Config::fromFile(dirname(__DIR__) . '/config/ai-accel.php');
+$config = Config::fromFile(dirname(__DIR__) . '/config/forja.php');
 $useModel = $model !== null || (bool) getenv('ANTHROPIC_API_KEY');
 $cacheDir = __DIR__ . '/.cache/' . ($useModel ? 'model' : 'reference');
 $manifest = new Manifest($cacheDir . '/manifest.json');
@@ -111,7 +111,7 @@ $builder = new Builder(
     new CCompiler(),
     new Verifier(iterations: 1000),
     $manifest,
-    new LockFile($cacheDir . '/accel.lock.json'),
+    new LockFile($cacheDir . '/forja.lock.json'),
     $cacheDir,
     $config->models(),
     $model,

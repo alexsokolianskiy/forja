@@ -1,9 +1,9 @@
 #include <stdint.h>
 #include <stddef.h>
 
-int64_t {{symbol}}(const char *s, size_t s_len, int32_t *accel_err)
+int64_t {{symbol}}(const char *s, size_t s_len, int32_t *forja_err)
 {
-    (void) accel_err;
+    (void) forja_err;
     int64_t count = 0;
     for (size_t i = 0; i < s_len; i++) {
         switch (s[i]) {

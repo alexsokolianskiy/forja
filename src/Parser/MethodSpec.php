@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace AiAccel\Parser;
+namespace Forja\Parser;
 
 /**
  * Everything the pipeline needs to know about one method to accelerate.

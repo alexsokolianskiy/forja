@@ -2,17 +2,17 @@
 
 declare(strict_types=1);
 
-namespace AiAccel;
+namespace Forja;
 
-use AiAccel\Fallback\FallbackHandler;
-use AiAccel\FFI\FFILoader;
-use AiAccel\FFI\NativeFunction;
+use Forja\Fallback\FallbackHandler;
+use Forja\FFI\FFILoader;
+use Forja\FFI\NativeFunction;
 use Psr\Log\LoggerInterface;
 
 /**
  * What runs inside the application.
  *
- * `ai-c-compile` writes a copy of every source file that has verified
+ * `forja` writes a copy of every source file that has verified
  * modules, with one guard line at the top of each accelerated method. The
  * autoloader registered here serves that copy instead of the original, so
  * callers keep writing `$service->method(...)` and get the C version. When
@@ -37,7 +37,7 @@ final class Runtime
 
     public static function defaultCacheDir(): string
     {
-        $env = getenv('AI_ACCEL_CACHE_DIR');
+        $env = getenv('FORJA_CACHE_DIR');
         if (is_string($env) && $env !== '') {
             return rtrim($env, '/');
         }
@@ -73,7 +73,7 @@ final class Runtime
         }
     }
 
-    /** Kill switch: with false every method runs as plain PHP. AI_ACCEL_DISABLE=1 does the same. */
+    /** Kill switch: with false every method runs as plain PHP. FORJA_DISABLE=1 does the same. */
     public static function enable(bool $enabled): void
     {
         self::$enabled = $enabled;
@@ -81,7 +81,7 @@ final class Runtime
 
     public static function isEnabled(): bool
     {
-        return self::$enabled ??= !in_array(strtolower((string) getenv('AI_ACCEL_DISABLE')), ['1', 'true', 'on', 'yes'], true);
+        return self::$enabled ??= !in_array(strtolower((string) getenv('FORJA_DISABLE')), ['1', 'true', 'on', 'yes'], true);
     }
 
     public static function autoload(string $class): void
@@ -93,7 +93,7 @@ final class Runtime
         if (@filemtime($entry['source']) !== $entry['mtime'] || !is_file($entry['php'])) {
             if (!isset(self::$staleReported[$entry['source']])) {
                 self::$staleReported[$entry['source']] = true;
-                self::fallback()->disable($entry['source'], 'file changed since the last ai-c-compile run');
+                self::fallback()->disable($entry['source'], 'file changed since the last forja run');
             }
 
             return; // Composer loads the original file

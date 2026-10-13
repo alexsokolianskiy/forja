@@ -2,15 +2,15 @@
 
 declare(strict_types=1);
 
-namespace AiAccel\Tests;
+namespace Forja\Tests;
 
-use AiAccel\Build\Manifest;
-use AiAccel\FFI\FFILoader;
-use AiAccel\FFI\NativeException;
-use AiAccel\Tests\Fixtures\Sample;
-use AiAccel\Tests\Support\PipelineTestCase;
-use AiAccel\Verify\Comparator;
-use AiAccel\Verify\InputGenerator;
+use Forja\Build\Manifest;
+use Forja\FFI\FFILoader;
+use Forja\FFI\NativeException;
+use Forja\Tests\Fixtures\Sample;
+use Forja\Tests\Support\PipelineTestCase;
+use Forja\Verify\Comparator;
+use Forja\Verify\InputGenerator;
 use PHPUnit\Framework\Attributes\DataProvider;
 
 final class BuildTest extends PipelineTestCase
@@ -208,10 +208,10 @@ final class BuildTest extends PipelineTestCase
     public function testLockDoesNotSurviveASignatureChange(): void
     {
         $entry = $this->build('triple');
-        $lockPath = $this->cacheDir . '/accel.lock.json';
+        $lockPath = $this->cacheDir . '/forja.lock.json';
         // What the lock file looks like after the developer adds a parameter to the PHP method.
         file_put_contents($lockPath, str_replace('(int64_t n,', '(int64_t n, int64_t m,', (string) file_get_contents($lockPath)));
-        $this->locks = new \AiAccel\Build\LockFile($lockPath);
+        $this->locks = new \Forja\Build\LockFile($lockPath);
 
         $rebuilt = $this->builder()->build($this->spec('triple'));
 

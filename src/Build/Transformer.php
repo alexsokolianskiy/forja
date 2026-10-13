@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace AiAccel\Build;
+namespace Forja\Build;
 
 use PhpParser\Node\Stmt;
 use PhpParser\NodeFinder;
@@ -79,9 +79,9 @@ final class Transformer
     {
         $key = var_export($guard['key'], true);
         $args = implode(', ', array_map(static fn (string $name): string => '$' . $name, $guard['params']));
-        $call = $guard['void'] ? "\$__accel([$args]); return;" : "return \$__accel([$args]);";
+        $call = $guard['void'] ? "\$__forja([$args]); return;" : "return \$__forja([$args]);";
 
-        return " if ((\$__accel = \\AiAccel\\Runtime::native($key)) !== null) { try { $call }"
-            . " catch (\\Throwable \$__accelError) { \\AiAccel\\Runtime::failed($key, \$__accelError); } }";
+        return " if ((\$__forja = \\Forja\\Runtime::native($key)) !== null) { try { $call }"
+            . " catch (\\Throwable \$__forjaError) { \\Forja\\Runtime::failed($key, \$__forjaError); } }";
     }
 }

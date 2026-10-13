@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace AiAccel\Verify;
+namespace Forja\Verify;
 
 /**
  * Differential test of a freshly compiled module against the original PHP

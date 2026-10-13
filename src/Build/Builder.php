@@ -2,18 +2,18 @@
 
 declare(strict_types=1);
 
-namespace AiAccel\Build;
+namespace Forja\Build;
 
-use AiAccel\Abi\Signature;
-use AiAccel\Compiler\CCompiler;
-use AiAccel\Compiler\CompileException;
-use AiAccel\Generator\CodeSanitizer;
-use AiAccel\Generator\GenerationException;
-use AiAccel\Generator\GeneratorInterface;
-use AiAccel\Generator\ModelResolver;
-use AiAccel\Generator\PromptBuilder;
-use AiAccel\Parser\MethodSpec;
-use AiAccel\Verify\Verifier;
+use Forja\Abi\Signature;
+use Forja\Compiler\CCompiler;
+use Forja\Compiler\CompileException;
+use Forja\Generator\CodeSanitizer;
+use Forja\Generator\GenerationException;
+use Forja\Generator\GeneratorInterface;
+use Forja\Generator\ModelResolver;
+use Forja\Generator\PromptBuilder;
+use Forja\Parser\MethodSpec;
+use Forja\Verify\Verifier;
 
 /**
  * Runs one method through generate -> sanitize -> compile -> verify and
@@ -21,7 +21,7 @@ use AiAccel\Verify\Verifier;
  *
  * Cache layout under $cacheDir:
  *   src/<hash>.c        generated source (commit and review it)
- *   accel.lock.json     frozen sources (commit it)
+ *   forja.lock.json     frozen sources (commit it)
  *   lib/                compiled libraries and their FFI headers (machine-specific)
  *   manifest.json       outcome of the last build
  */
@@ -156,7 +156,7 @@ final class Builder
         $libId = substr(hash('sha256', $source . "\0" . $this->compiler->id()), 0, 32);
         $entry['libId'] = $libId;
         $entry['lib'] = "{$this->cacheDir}/lib/$libId." . CCompiler::libraryExtension();
-        $entry['scope'] = 'accel_' . $libId;
+        $entry['scope'] = 'forja_' . $libId;
         $entry['hfile'] = "{$this->cacheDir}/lib/$libId.h";
 
         $previous = $this->manifest->get($key);
