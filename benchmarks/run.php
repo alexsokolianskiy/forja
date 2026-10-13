@@ -46,10 +46,29 @@ function workloads(): array
         }
     }
 
+    // About 2 MB of prose-like text: 300,000 words drawn unevenly from a 20,000-word vocabulary.
+    $letters = 'abcdefghijklmnopqrstuvwxyz';
+    $vocabulary = [];
+    for ($i = 0; $i < 20_000; $i++) {
+        $word = '';
+        for ($k = mt_rand(2, 10); $k > 0; $k--) {
+            $word .= $letters[mt_rand(0, 25)];
+        }
+        $vocabulary[] = $word;
+    }
+    $separators = [' ', ' ', ' ', ' ', ', ', '. ', "\n", ' - '];
+    $text = '';
+    for ($i = 0; $i < 300_000; $i++) {
+        $word = $vocabulary[min(mt_rand(0, 19_999), mt_rand(0, 19_999))]; // low indexes come up more often
+        $text .= (mt_rand(0, 9) === 0 ? ucfirst($word) : $word) . $separators[mt_rand(0, 7)];
+    }
+
     return [
         'mandelbrot' => [320, 240, 300],
         'quicksort' => [$ints],
         'matmul' => [$a, $b],
+        'repeatedWords' => [$text],
+        'repeatedWordsLoop' => [$text],
     ];
 }
 
@@ -119,7 +138,7 @@ $builder = new Builder(
 echo 'C source: ', $useModel ? 'written by the model' : 'hand-written reference (no --model and no ANTHROPIC_API_KEY)', "\n";
 foreach ((new MethodExtractor())->extractFromFile(__DIR__ . '/Kernels.php') as $spec) {
     $entry = $builder->build($spec);
-    printf("  %-11s %-10s %s%s\n", $spec->method, $entry['status'], $useModel ? "[{$entry['model']}] " : '', strtok((string) $entry['message'], "\n"));
+    printf("  %-18s %-10s %s%s\n", $spec->method, $entry['status'], $useModel ? "[{$entry['model']}] " : '', strtok((string) $entry['message'], "\n"));
 }
 (new Publisher($cacheDir))->publish($manifest);
 Runtime::configure($cacheDir);
@@ -131,7 +150,7 @@ $jit = child(['opcache.enable_cli=1', 'opcache.jit=tracing', 'opcache.jit_buffer
 $jitOn = ($jit['jit'] ?? false) === true;
 
 printf("\nPHP %s, best of %d runs, wall time in ms\n\n", PHP_VERSION, REPEATS);
-printf("%-11s %10s %10s %10s %12s %12s\n", 'kernel', 'PHP', 'PHP+JIT', 'PHP+C', 'C vs PHP', 'C vs JIT');
+printf("%-18s %10s %10s %10s %12s %12s\n", 'kernel', 'PHP', 'PHP+JIT', 'PHP+C', 'C vs PHP', 'C vs JIT');
 foreach (workloads() as $method => $args) {
     $native = null;
     $note = '';
@@ -149,7 +168,7 @@ foreach (workloads() as $method => $args) {
     $php = $plain['timings'][$method];
     $jitMs = $jitOn ? $jit['timings'][$method] : null;
     printf(
-        "%-11s %10.2f %10s %10s %12s %12s%s\n",
+        "%-18s %10.2f %10s %10s %12s %12s%s\n",
         $method,
         $php,
         $jitMs === null ? 'n/a' : sprintf('%.2f', $jitMs),

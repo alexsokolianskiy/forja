@@ -112,4 +112,55 @@ final class Kernels
 
         return $c;
     }
+
+    /**
+     * How many distinct words occur more than once in a text. Words are runs of
+     * ASCII letters and digits, compared case-insensitively.
+     *
+     * Written the usual PHP way: every step is a built-in that already runs in C.
+     */
+    #[AccelerateToC(ranges: ['text.len' => [0, 400]])]
+    public static function repeatedWords(string $text): int
+    {
+        $words = preg_split('/[^a-z0-9]+/', strtolower($text), -1, PREG_SPLIT_NO_EMPTY);
+        $repeated = 0;
+        foreach (array_count_values($words) as $count) {
+            if ($count > 1) {
+                $repeated++;
+            }
+        }
+
+        return $repeated;
+    }
+
+    /**
+     * The same result as repeatedWords(), computed with an explicit loop over the bytes.
+     */
+    #[AccelerateToC(ranges: ['text.len' => [0, 400]])]
+    public static function repeatedWordsLoop(string $text): int
+    {
+        $counts = [];
+        $word = '';
+        $length = strlen($text);
+        for ($i = 0; $i <= $length; $i++) {
+            $code = $i < $length ? ord($text[$i]) : 0;
+            if ($code >= 65 && $code <= 90) {
+                $code += 32;
+            }
+            if (($code >= 97 && $code <= 122) || ($code >= 48 && $code <= 57)) {
+                $word .= chr($code);
+            } elseif ($word !== '') {
+                $counts[$word] = ($counts[$word] ?? 0) + 1;
+                $word = '';
+            }
+        }
+        $repeated = 0;
+        foreach ($counts as $count) {
+            if ($count > 1) {
+                $repeated++;
+            }
+        }
+
+        return $repeated;
+    }
 }
