@@ -22,6 +22,7 @@ final class NativeFunction
     private readonly FFI\CData $sizeA;
     private readonly FFI\CData $sizeB;
     private readonly string $freeSymbol;
+    private readonly bool $serializedReturn;
 
     /** @param list<array{name: string, kind: string}> $params */
     public function __construct(
@@ -36,6 +37,11 @@ final class NativeFunction
         $this->sizeA = $ffi->new('int64_t');
         $this->sizeB = $ffi->new('int64_t');
         $this->freeSymbol = $symbol . '_free';
+        $this->serializedReturn = Signature::returnsSerialized($params, $returnKind);
+        if (Signature::usesRuntime($params, $returnKind) && !in_array(ini_get('serialize_precision'), ['-1', '17'], true)) {
+            // Floats would lose digits on the way to C.
+            throw new \RuntimeException('serialize_precision must be -1 (the PHP default) for methods that pass arrays of mixed values');
+        }
     }
 
     /**
@@ -70,6 +76,16 @@ final class NativeFunction
                     $native[] = $value;
                     $native[] = strlen($value);
                     break;
+                case 'mixed':
+                    $this->ensureRoomToSerialize($name, $value);
+                    try {
+                        $serialized = serialize($value);
+                    } catch (\Throwable $e) {
+                        throw new MarshalException("\$$name cannot be passed to C: " . $e->getMessage());
+                    }
+                    $native[] = $serialized;
+                    $native[] = strlen($serialized);
+                    break;
                 case 'int[]':
                 case 'float[]':
                     (is_array($value) && array_is_list($value)) or throw new MarshalException("\$$name must be a list");
@@ -85,12 +101,12 @@ final class NativeFunction
         }
 
         $kind = $this->returnKind;
-        $buffered = $kind === 'string' || Signature::elementType($kind) !== null;
+        $buffered = $this->serializedReturn || $kind === 'string' || Signature::elementType($kind) !== null;
         if ($buffered) {
             $this->sizeA->cdata = 0;
             $this->sizeB->cdata = 0;
             $native[] = FFI::addr($this->sizeA);
-            if (Signature::isMatrix($kind)) {
+            if (!$this->serializedReturn && Signature::isMatrix($kind)) {
                 $native[] = FFI::addr($this->sizeB);
             }
         }
@@ -112,12 +128,59 @@ final class NativeFunction
                 throw new NativeException('native code declined these arguments');
             }
 
+            if ($this->serializedReturn) {
+                return $this->unserializeResult($result, $this->sizeA->cdata);
+            }
+
             return $this->unpackResult($kind, $result, $this->sizeA->cdata, $this->sizeB->cdata);
         } finally {
             if ($result !== null) {
                 $this->ffi->{$this->freeSymbol}($result);
             }
         }
+    }
+
+    /**
+     * Serializing copies the value, and running out of memory is a fatal error that no fallback
+     * can catch. So a value that might not fit under memory_limit is not sent to C at all.
+     */
+    private function ensureRoomToSerialize(string $name, mixed $value): void
+    {
+        $limit = self::memoryLimit();
+        if ($limit <= 0) {
+            return;
+        }
+        $estimate = is_array($value) ? count($value, COUNT_RECURSIVE) * 64 : (is_string($value) ? strlen($value) : 0);
+        if ($estimate * 2 > $limit - memory_get_usage()) {
+            throw new MarshalException("\$$name is too large to copy within memory_limit");
+        }
+    }
+
+    private static function memoryLimit(): int
+    {
+        $raw = trim((string) ini_get('memory_limit'));
+        $value = (int) $raw;
+
+        return match (strtolower(substr($raw, -1))) {
+            'g' => $value << 30,
+            'm' => $value << 20,
+            'k' => $value << 10,
+            default => $value,
+        };
+    }
+
+    private function unserializeResult(?FFI\CData $buffer, int $length): mixed
+    {
+        if ($buffer === null || $length <= 0) {
+            throw new NativeException('native code returned no value');
+        }
+        $serialized = FFI::string($buffer, $length);
+        $value = @unserialize($serialized, ['allowed_classes' => false]);
+        if ($value === false && $serialized !== 'b:0;') {
+            throw new NativeException('native code returned a value PHP cannot read');
+        }
+
+        return $value;
     }
 
     private function unpackResult(string $kind, ?FFI\CData $buffer, int $a, int $b): string|array

@@ -34,13 +34,15 @@ final class CompileCommand
           --auto             Also translate methods without #[AccelerateToC] that contain a loop and qualify
           --dry-run          Show what would be generated, reused or skipped; call no model, build nothing
 
-        Freezing good results
+        Reproducible builds
+          --frozen           Never call a model: build only from forja/src and forja.lock.json, and check
+                             that the sources match their recorded checksums. For CI and deploys
           --lock[=KEY]       Freeze the verified C of Class::method (or of everything verified):
-                             it is never regenerated again, only re-verified
+                             it is kept even when the PHP method changes, and only re-verified
           --unlock[=KEY]     Remove the lock from Class::method (or from everything)
 
         Building
-          --force            Regenerate and rebuild even when cached (locked methods keep their C)
+          --force            Ask the model again even for unchanged methods (locked methods keep their C)
           --no-verify        Skip the differential test and use the modules untested
           --strict           Exit with status 1 unless every attributed method ends up accelerated
           --status           Print the last build's results and exit
@@ -48,7 +50,7 @@ final class CompileCommand
 
         TXT;
 
-    private const FLAGS = ['auto', 'dry-run', 'force', 'no-verify', 'strict', 'status'];
+    private const FLAGS = ['auto', 'dry-run', 'force', 'frozen', 'no-verify', 'strict', 'status'];
     private const VALUES = ['config', 'model'];
     private const OPTIONAL_VALUES = ['lock', 'unlock'];
 
@@ -89,8 +91,10 @@ final class CompileCommand
         }
 
         $config = Config::fromFile($this->configFile($options['config'] ?? null));
-        $manifest = new Manifest($config->manifestPath());
-        $locks = new LockFile($config->lockPath());
+        $layout = $config->layout();
+        $manifest = new Manifest($layout->manifestPath());
+        $locks = new LockFile($layout->lockPath());
+        $frozen = $config->frozen || isset($options['frozen']);
 
         if (isset($options['status'])) {
             $this->report($manifest->all());
@@ -98,7 +102,7 @@ final class CompileCommand
             return 0;
         }
         if (isset($options['lock']) || isset($options['unlock'])) {
-            return $this->changeLocks($options, $manifest, $locks);
+            return $this->changeLocks($options, $locks);
         }
 
         $verify = $config->verifyEnabled && !isset($options['no-verify']);
@@ -108,9 +112,10 @@ final class CompileCommand
             $verify ? new Verifier($config->verifyIterations, $config->verifyTimeout) : null,
             $manifest,
             $locks,
-            $config->cacheDir,
+            $layout,
             $config->models(),
             $options['model'] ?? null,
+            $frozen,
         );
 
         $auto = $config->auto || isset($options['auto']);
@@ -131,7 +136,7 @@ final class CompileCommand
             }
             foreach ($specs as $spec) {
                 if (isset($options['dry-run'])) {
-                    fwrite($this->out, sprintf("%s\n    %s\n", $spec->key(), $builder->plan($spec)));
+                    fwrite($this->out, sprintf("%s\n    %s\n", $spec->key(), $builder->plan($spec, isset($options['force']))));
                     $entries[$spec->key()] = null;
                     continue;
                 }
@@ -150,12 +155,18 @@ final class CompileCommand
         foreach ($manifest->all() as $key => $entry) {
             if (!isset($entries[$key]) && (isset($scanned[$entry['sourceFile']]) || !is_file($entry['sourceFile']))) {
                 $manifest->remove($key);
+                $lock = $locks->get($key);
+                if ($lock !== null && !$frozen) {
+                    @unlink($layout->dir . '/' . $lock['source']);
+                    $locks->remove($key);
+                }
             }
         }
         $manifest->save();
-        $published = (new Publisher($config->cacheDir))->publish($manifest, !$verify);
+        $layout->prepare();
+        $published = (new Publisher($layout->buildDir()))->publish($manifest, !$verify);
 
-        $this->summary($entries, $published, $config);
+        $this->summary($entries, $published, $layout->buildDir());
         $bad = array_filter($entries, static fn (array $e): bool => !$e['auto']
             && !in_array($e['status'], $verify ? [Manifest::VERIFIED] : [Manifest::VERIFIED, Manifest::UNVERIFIED], true));
 
@@ -164,39 +175,27 @@ final class CompileCommand
     }
 
     /** @param array<string, string|true> $options */
-    private function changeLocks(array $options, Manifest $manifest, LockFile $locks): int
+    private function changeLocks(array $options, LockFile $locks): int
     {
-        $unlock = isset($options['unlock']);
-        $target = $options[$unlock ? 'unlock' : 'lock'];
-        $keys = $target === true
-            ? array_keys($unlock ? $locks->all() : $manifest->all())
-            : [ltrim((string) $target, '\\')];
+        $lock = !isset($options['unlock']);
+        $target = $options[$lock ? 'lock' : 'unlock'];
+        $keys = $target === true ? array_keys($locks->all()) : [ltrim((string) $target, '\\')];
 
         $changed = 0;
         foreach ($keys as $key) {
-            if ($unlock) {
-                $done = $locks->unlock($key);
-                $why = 'is not locked';
-            } else {
-                $entry = $manifest->get($key);
-                $done = $entry !== null && $entry['status'] === Manifest::VERIFIED;
-                $why = $entry === null ? 'has not been built' : "is {$entry['status']}, only verified code can be locked";
-                if ($done && $locks->get($key) === null) {
-                    $locks->lock($key, $entry);
-                    $manifest->put($key, ['locked' => true] + $entry);
-                }
-            }
-            if ($done) {
-                $changed++;
-                fwrite($this->out, ($unlock ? 'UNLOCKED    ' : 'LOCKED      ') . "$key\n");
-            } elseif ($target !== true) {
-                fwrite($this->out, "$key $why\n");
+            $entry = $locks->get($key);
+            if ($entry === null) {
+                fwrite($this->out, "$key has no verified translation; run forja first\n");
 
                 return 1;
             }
+            if (($entry['locked'] ?? false) !== $lock) {
+                $locks->setLocked($key, $lock);
+                $changed++;
+                fwrite($this->out, ($lock ? 'LOCKED      ' : 'UNLOCKED    ') . "$key\n");
+            }
         }
-        $manifest->save();
-        fwrite($this->out, $changed ? '' : ($unlock ? "Nothing is locked.\n" : "Nothing verified to lock. Run forja first.\n"));
+        fwrite($this->out, $changed ? '' : ($lock ? "Nothing new to lock.\n" : "Nothing is locked.\n"));
 
         return 0;
     }
@@ -260,7 +259,7 @@ final class CompileCommand
     }
 
     /** @param array<string, array<string, mixed>> $entries */
-    private function summary(array $entries, int $published, Config $config): void
+    private function summary(array $entries, int $published, string $buildDir): void
     {
         if (!$entries) {
             fwrite($this->out, "No methods to accelerate found.\n");
@@ -268,7 +267,7 @@ final class CompileCommand
         fwrite($this->out, sprintf("\n%d method(s) now run as C; everything else runs as PHP.\n", $published));
         if ($published > 0 && strtolower((string) ini_get('ffi.enable')) === 'preload') {
             fwrite($this->out, "Web requests need one of these in php.ini (ffi.enable is 'preload'):\n"
-                . "  opcache.preload={$config->cacheDir}/preload.php\n  ffi.enable=1\n");
+                . "  opcache.preload=$buildDir/preload.php\n  ffi.enable=1\n");
         } elseif ($published > 0 && !FFILoader::unrestricted()) {
             fwrite($this->out, "FFI is disabled (ffi.enable=" . ini_get('ffi.enable') . "), so nothing will use these modules yet.\n");
         }

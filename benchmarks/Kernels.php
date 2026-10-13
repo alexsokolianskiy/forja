@@ -163,4 +163,62 @@ final class Kernels
 
         return $repeated;
     }
+
+    /**
+     * How often each word occurs. Words are runs of ASCII letters and digits, lower-cased.
+     * The result is an associative array, so it goes through the Forja runtime.
+     *
+     * @return array<string, int>
+     */
+    #[AccelerateToC(ranges: ['text.len' => [0, 400]], examples: [['The cat and the hat. THE END 7 7 007']])]
+    public static function wordCounts(string $text): array
+    {
+        return array_count_values(preg_split('/[^a-z0-9]+/', strtolower($text), -1, PREG_SPLIT_NO_EMPTY));
+    }
+
+    /**
+     * The same result as wordCounts(), computed with an explicit loop over the bytes.
+     *
+     * @return array<string, int>
+     */
+    #[AccelerateToC(ranges: ['text.len' => [0, 400]], examples: [['The cat and the hat. THE END 7 7 007']])]
+    public static function wordCountsLoop(string $text): array
+    {
+        $counts = [];
+        $word = '';
+        $length = strlen($text);
+        for ($i = 0; $i <= $length; $i++) {
+            $code = $i < $length ? ord($text[$i]) : 0;
+            if ($code >= 65 && $code <= 90) {
+                $code += 32;
+            }
+            if (($code >= 97 && $code <= 122) || ($code >= 48 && $code <= 57)) {
+                $word .= chr($code);
+            } elseif ($word !== '') {
+                $counts[$word] = ($counts[$word] ?? 0) + 1;
+                $word = '';
+            }
+        }
+
+        return $counts;
+    }
+
+    /**
+     * Revenue per customer from order rows, the shape Order::query()->get()->toArray() returns.
+     * The query stays in PHP; only this aggregation is translated.
+     *
+     * @param list<array{customer: string, amount: float, qty: int}> $orders
+     * @return array<string, float>
+     */
+    #[AccelerateToC]
+    public static function totalsByCustomer(array $orders): array
+    {
+        $totals = [];
+        foreach ($orders as $order) {
+            $customer = $order['customer'];
+            $totals[$customer] = ($totals[$customer] ?? 0.0) + $order['amount'] * $order['qty'];
+        }
+
+        return $totals;
+    }
 }

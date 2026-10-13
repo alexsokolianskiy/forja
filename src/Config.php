@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Forja;
 
+use Forja\Build\Layout;
 use Forja\Generator\ModelResolver;
 
 final class Config
@@ -22,7 +23,7 @@ final class Config
      * @param list<string> $paths
      */
     public function __construct(
-        public readonly string $cacheDir,
+        public readonly string $dir,
         public readonly string $defaultModel = Model::SONNET,
         public readonly array $providers = self::DEFAULT_PROVIDERS,
         public readonly array $aliases = [],
@@ -30,6 +31,7 @@ final class Config
         public readonly array $cflags = self::DEFAULT_CFLAGS,
         public readonly array $paths = ['app', 'src'],
         public readonly bool $auto = false,
+        public readonly bool $frozen = false,
         public readonly bool $verifyEnabled = true,
         public readonly int $verifyIterations = 1000,
         public readonly int $verifyTimeout = 60,
@@ -40,7 +42,7 @@ final class Config
     public static function fromArray(array $values): self
     {
         return new self(
-            cacheDir: rtrim($values['cache_dir'] ?? Runtime::defaultCacheDir(), '/'),
+            dir: rtrim($values['dir'] ?? Runtime::defaultDir(), '/'),
             defaultModel: $values['default_model'] ?? Model::SONNET,
             providers: ($values['providers'] ?? []) + self::DEFAULT_PROVIDERS,
             aliases: $values['aliases'] ?? [],
@@ -48,6 +50,7 @@ final class Config
             cflags: $values['cflags'] ?? self::DEFAULT_CFLAGS,
             paths: $values['paths'] ?? ['app', 'src'],
             auto: $values['auto'] ?? false,
+            frozen: $values['frozen'] ?? false,
             verifyEnabled: $values['verify']['enabled'] ?? true,
             verifyIterations: $values['verify']['iterations'] ?? 1000,
             verifyTimeout: $values['verify']['timeout'] ?? 60,
@@ -59,14 +62,9 @@ final class Config
         return self::fromArray(require $file);
     }
 
-    public function manifestPath(): string
+    public function layout(): Layout
     {
-        return $this->cacheDir . '/manifest.json';
-    }
-
-    public function lockPath(): string
-    {
-        return $this->cacheDir . '/forja.lock.json';
+        return new Layout($this->dir);
     }
 
     public function models(): ModelResolver

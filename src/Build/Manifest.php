@@ -15,6 +15,7 @@ final class Manifest
     public const REJECTED = 'rejected';
     public const FAILED = 'failed';
     public const UNSUPPORTED = 'unsupported';
+    public const MISSING = 'missing';
 
     /** @var array<string, array<string, mixed>>|null */
     private ?array $entries = null;

@@ -19,7 +19,19 @@ final class CCompiler
     /** Identifies the toolchain, so libraries built with other flags or on another platform are not reused. */
     public function id(): string
     {
-        return implode(' ', [$this->compiler, ...$this->flags, PHP_OS_FAMILY, php_uname('m')]);
+        $runtime = hash_file('sha256', dirname(__DIR__, 2) . '/runtime/forja_rt.h');
+
+        return implode(' ', [$this->compiler, ...$this->flags, PHP_OS_FAMILY, php_uname('m'), PHP_VERSION_ID, $runtime]);
+    }
+
+    /**
+     * Where forja_rt.h is, and which PHP the code must imitate (array semantics differ slightly between versions).
+     *
+     * @return list<string>
+     */
+    public static function runtimeFlags(): array
+    {
+        return ['-I' . dirname(__DIR__, 2) . '/runtime', '-DFJ_PHP_VERSION_ID=' . PHP_VERSION_ID];
     }
 
     public static function libraryExtension(): string
@@ -39,7 +51,7 @@ final class CCompiler
         }
         // Build next to the target and rename, so a concurrent reader never maps a half-written library.
         $tmp = $libraryPath . '.' . getmypid() . '.tmp';
-        $command = [$this->compiler, '-shared', '-fPIC', ...$this->flags, '-o', $tmp, $sourcePath, '-lm'];
+        $command = [$this->compiler, '-shared', '-fPIC', ...$this->flags, ...self::runtimeFlags(), '-o', $tmp, $sourcePath, '-lm'];
 
         $process = @proc_open($command, [1 => ['pipe', 'w'], 2 => ['pipe', 'w']], $pipes);
         if (!is_resource($process)) {

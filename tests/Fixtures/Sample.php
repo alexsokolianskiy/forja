@@ -223,6 +223,75 @@ final class Sample
         return (int) $n;
     }
 
+    /**
+     * @return array<string, int>
+     */
+    #[AccelerateToC(ranges: ['text.len' => [0, 200]], examples: [['The cat and the hat. THE END 7 7 007'], ['']])]
+    public static function wordCounts(string $text): array
+    {
+        $counts = [];
+        $word = '';
+        $length = strlen($text);
+        for ($i = 0; $i <= $length; $i++) {
+            $code = $i < $length ? ord($text[$i]) : 0;
+            if ($code >= 65 && $code <= 90) {
+                $code += 32;
+            }
+            if (($code >= 97 && $code <= 122) || ($code >= 48 && $code <= 57)) {
+                $word .= chr($code);
+            } elseif ($word !== '') {
+                $counts[$word] = ($counts[$word] ?? 0) + 1;
+                $word = '';
+            }
+        }
+
+        return $counts;
+    }
+
+    /**
+     * The shape of rows an ORM query returns after ->toArray().
+     *
+     * @param list<array{customer: string, amount: float, qty: int}> $orders
+     * @return array<string, float>
+     */
+    #[AccelerateToC]
+    public static function totalsByCustomer(array $orders): array
+    {
+        $totals = [];
+        foreach ($orders as $order) {
+            $customer = $order['customer'];
+            $totals[$customer] = ($totals[$customer] ?? 0.0) + $order['amount'] * $order['qty'];
+        }
+
+        return $totals;
+    }
+
+    #[AccelerateToC]
+    public static function orDefault(?int $value, int|string $default): int|string
+    {
+        return $value ?? $default;
+    }
+
+    /** @param array<int|string, int> $map */
+    #[AccelerateToC]
+    public static function dropNegatives(array $map, ?int $limit): array
+    {
+        foreach ($map as $key => $value) {
+            if ($value < 0 || ($limit !== null && $value > $limit)) {
+                unset($map[$key]);
+            }
+        }
+        $map[] = count($map);
+
+        return $map;
+    }
+
+    #[AccelerateToC]
+    public static function takesObject(\DateTimeInterface $when): int
+    {
+        return 1;
+    }
+
     #[AccelerateToC]
     public static function callsUserFunction(int $n): int
     {

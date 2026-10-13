@@ -10,7 +10,8 @@ namespace Forja\Parser;
 final class MethodSpec
 {
     /**
-     * @param list<array{name: string, kind: string}> $params kind is one of Signature::KINDS
+     * @param list<array{name: string, kind: string, shape?: string}> $params kind is one of Signature::KINDS;
+     *        shape is the declared type of a `mixed` parameter, used to generate test inputs
      * @param string $context source of the class constants and helper methods the method uses
      * @param array<string, array{0: int|float, 1: int|float}> $ranges
      * @param bool $auto picked up by --auto rather than by an attribute
@@ -27,6 +28,7 @@ final class MethodSpec
         public readonly bool $deterministic = true,
         public readonly array $ranges = [],
         public readonly bool $lock = false,
+        public readonly array $examples = [],
         public readonly bool $auto = false,
         public readonly ?string $unsupported = null,
     ) {

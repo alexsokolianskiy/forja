@@ -23,7 +23,7 @@ final class Runtime
 {
     /** @var array{classes: array<string, array<string, mixed>>, modules: array<string, array<string, mixed>>}|null */
     private static ?array $map = null;
-    private static ?string $cacheDir = null;
+    private static ?string $dir = null;
     private static ?bool $enabled = null;
     private static bool $registered = false;
     private static ?FallbackHandler $fallback = null;
@@ -35,9 +35,10 @@ final class Runtime
     /** @var array<string, true> */
     private static array $staleReported = [];
 
-    public static function defaultCacheDir(): string
+    /** The project's forja/ directory: FORJA_DIR, or forja/ next to the root composer.json. */
+    public static function defaultDir(): string
     {
-        $env = getenv('FORJA_CACHE_DIR');
+        $env = getenv('FORJA_DIR');
         if (is_string($env) && $env !== '') {
             return rtrim($env, '/');
         }
@@ -45,16 +46,16 @@ final class Runtime
             ? (\Composer\InstalledVersions::getRootPackage()['install_path'] ?? null)
             : null;
 
-        return rtrim((string) (($root ? realpath($root) : false) ?: getcwd()), '/') . '/storage/c_cache';
+        return rtrim((string) (($root ? realpath($root) : false) ?: getcwd()), '/') . '/forja';
     }
 
     /**
-     * Optional: call once at boot to use a non-default cache directory or to receive log messages.
+     * Optional: call once at boot to use a non-default forja/ directory or to receive log messages.
      */
-    public static function configure(?string $cacheDir = null, ?LoggerInterface $logger = null): void
+    public static function configure(?string $dir = null, ?LoggerInterface $logger = null): void
     {
-        if ($cacheDir !== null && rtrim($cacheDir, '/') !== self::$cacheDir) {
-            self::$cacheDir = rtrim($cacheDir, '/');
+        if ($dir !== null && rtrim($dir, '/') !== self::$dir) {
+            self::$dir = rtrim($dir, '/');
             self::$map = null;
             self::$natives = [];
         }
@@ -158,7 +159,7 @@ final class Runtime
     private static function map(): array
     {
         if (self::$map === null) {
-            $file = (self::$cacheDir ??= self::defaultCacheDir()) . '/runtime.php';
+            $file = (self::$dir ??= self::defaultDir()) . '/build/runtime.php';
             $map = is_file($file) ? require $file : null;
             self::$map = is_array($map) ? $map : ['classes' => [], 'modules' => []];
         }

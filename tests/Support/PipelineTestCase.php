@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Forja\Tests\Support;
 
 use Forja\Build\Builder;
+use Forja\Build\Layout;
 use Forja\Build\LockFile;
 use Forja\Build\Manifest;
 use Forja\Build\Publisher;
@@ -20,7 +21,9 @@ use PHPUnit\Framework\TestCase;
 
 abstract class PipelineTestCase extends TestCase
 {
-    protected string $cacheDir;
+    /** A throwaway project's forja/ directory. */
+    protected string $dir;
+    protected Layout $layout;
     protected FixtureGenerator $generator;
     protected Manifest $manifest;
     protected LockFile $locks;
@@ -28,33 +31,51 @@ abstract class PipelineTestCase extends TestCase
 
     protected function setUp(): void
     {
-        $this->cacheDir = sys_get_temp_dir() . '/forja-test-' . bin2hex(random_bytes(6));
+        $this->dir = sys_get_temp_dir() . '/forja-test-' . bin2hex(random_bytes(6)) . '/forja';
+        $this->layout = new Layout($this->dir);
         $this->generator = new FixtureGenerator(dirname(__DIR__) . '/c');
-        $this->manifest = new Manifest($this->cacheDir . '/manifest.json');
-        $this->locks = new LockFile($this->cacheDir . '/forja.lock.json');
+        $this->manifest = new Manifest($this->layout->manifestPath());
+        $this->locks = new LockFile($this->layout->lockPath());
         $this->builder = $this->builder();
     }
 
     protected function tearDown(): void
     {
-        foreach (['/src', '/lib', '/php', ''] as $sub) {
-            array_map('unlink', glob($this->cacheDir . $sub . '/*.*') ?: []);
-            @rmdir($this->cacheDir . $sub);
+        self::removeTree(dirname($this->dir));
+    }
+
+    protected static function removeTree(string $path): void
+    {
+        if (!is_dir($path)) {
+            return;
         }
+        $items = new \RecursiveIteratorIterator(
+            new \RecursiveDirectoryIterator($path, \FilesystemIterator::SKIP_DOTS),
+            \RecursiveIteratorIterator::CHILD_FIRST
+        );
+        foreach ($items as $item) {
+            $item->isDir() ? rmdir($item->getPathname()) : unlink($item->getPathname());
+        }
+        rmdir($path);
     }
 
     /** @param array<string, array<string, mixed>> $providers */
-    protected function builder(?string $modelOverride = null, ?GeneratorInterface $generator = null, array $providers = Config::DEFAULT_PROVIDERS): Builder
-    {
+    protected function builder(
+        ?string $modelOverride = null,
+        ?GeneratorInterface $generator = null,
+        array $providers = Config::DEFAULT_PROVIDERS,
+        bool $frozen = false,
+    ): Builder {
         return new Builder(
             $generator ?? $this->generator,
             new CCompiler(),
             new Verifier(iterations: 1000, timeout: 30),
-            $this->manifest,
-            $this->locks,
-            $this->cacheDir,
+            new Manifest($this->layout->manifestPath()),
+            new LockFile($this->layout->lockPath()),
+            $this->layout,
             new ModelResolver($providers, ['fast' => 'local:tiny'], 'anthropic:claude-sonnet-5-5'),
             $modelOverride,
+            $frozen,
         );
     }
 
@@ -76,12 +97,18 @@ abstract class PipelineTestCase extends TestCase
     /** @return array<string, mixed> */
     protected function build(string $method, bool $force = false): array
     {
-        return $this->builder->build($this->spec($method), $force);
+        return $this->builder()->build($this->spec($method), $force);
+    }
+
+    /** @return array<string, mixed>|null the method's entry in forja.lock.json */
+    protected function lock(string $method): ?array
+    {
+        return (new LockFile($this->layout->lockPath()))->get(Sample::class . '::' . $method);
     }
 
     protected function publish(): int
     {
-        return (new Publisher($this->cacheDir))->publish($this->manifest);
+        return (new Publisher($this->layout->buildDir()))->publish(new Manifest($this->layout->manifestPath()));
     }
 
     /**
@@ -98,7 +125,7 @@ abstract class PipelineTestCase extends TestCase
             [0 => ['pipe', 'r'], 1 => ['pipe', 'w'], 2 => ['pipe', 'w']],
             $pipes,
             null,
-            $env + ['FORJA_CACHE_DIR' => $this->cacheDir] + getenv()
+            $env + ['FORJA_DIR' => $this->dir] + getenv()
         );
         fwrite($pipes[0], json_encode($calls));
         fclose($pipes[0]);

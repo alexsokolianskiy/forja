@@ -11,17 +11,25 @@ namespace Forja\Generator;
  */
 final class CodeSanitizer
 {
+    public const GENERATED_MARKER = '/* forja: generated below this line, do not edit */';
+
     private const ALLOWED_HEADERS = ['stdint.h', 'stddef.h', 'stdbool.h', 'stdlib.h', 'string.h', 'math.h', 'limits.h', 'float.h'];
 
-    private const FORBIDDEN_CALLS = 'system|popen|fork|vfork|exec[lv]p?e?|dlopen|dlsym|socket|connect|fopen|freopen|open|creat'
+    private const FORBIDDEN_CALLS = 'setjmp|longjmp|system|popen|fork|vfork|exec[lv]p?e?|dlopen|dlsym|socket|connect|fopen|freopen|open|creat'
         . '|unlink|remove|rename|getenv|setenv|putenv|signal|sigaction|mmap|mprotect|syscall|ptrace|kill|abort|exit|_exit';
 
     public function check(string $source, string $symbol): void
     {
+        // Only the part the model wrote is inspected; the generated wrapper below the marker is ours.
+        $source = strstr($source, self::GENERATED_MARKER, true) ?: $source;
+        $withStrings = (string) preg_replace(['~/\*.*?\*/~s', '~//[^\n]*~'], ' ', $source);
         $code = $this->stripCommentsAndStrings($source);
 
-        preg_match_all('/^[ \t]*#[ \t]*include[ \t]*(.+)$/m', $code, $includes);
+        preg_match_all('/^[ \t]*#[ \t]*include[ \t]*(.+)$/m', $withStrings, $includes);
         foreach ($includes[1] as $include) {
+            if (trim($include) === '"forja_rt.h"') {
+                continue;
+            }
             if (!preg_match('/^<([\w.\/]+)>/', trim($include), $m) || !in_array($m[1], self::ALLOWED_HEADERS, true)) {
                 throw new GenerationException('generated C includes a header that is not allowed: ' . trim($include));
             }

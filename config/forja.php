@@ -36,9 +36,14 @@ return [
         // 'openrouter' => ['driver' => 'openai', 'base_url' => 'https://openrouter.ai/api/v1', 'api_key' => getenv('OPENROUTER_API_KEY')],
     ],
 
-    // Generated C (src/) and forja.lock.json belong in version control; lib/, php/, manifest.json,
-    // runtime.php and preload.php are rebuilt on every machine. Override with FORJA_CACHE_DIR.
-    'cache_dir' => Forja\Runtime::defaultCacheDir(),
+    // The project's forja/ directory. Commit forja/src and forja/forja.lock.json: they are the verified
+    // translations every machine builds from. forja/build is machine-specific and ignored by git.
+    // Override with FORJA_DIR.
+    'dir' => Forja\Runtime::defaultDir(),
+
+    // true (or FORJA_FROZEN=1, or --frozen): never call a model. Build only from the committed sources,
+    // like `composer install` builds only from composer.lock. Use it on CI and in production.
+    'frozen' => (bool) getenv('FORJA_FROZEN'),
 
     'compiler' => getenv('CC') ?: 'cc',
 

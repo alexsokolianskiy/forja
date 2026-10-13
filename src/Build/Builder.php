@@ -16,14 +16,12 @@ use Forja\Parser\MethodSpec;
 use Forja\Verify\Verifier;
 
 /**
- * Runs one method through generate -> sanitize -> compile -> verify and
- * records the outcome in the manifest.
+ * Takes one method from PHP to a verified C module.
  *
- * Cache layout under $cacheDir:
- *   src/<hash>.c        generated source (commit and review it)
- *   forja.lock.json     frozen sources (commit it)
- *   lib/                compiled libraries and their FFI headers (machine-specific)
- *   manifest.json       outcome of the last build
+ * A verified source already in forja/src is reused byte for byte. Otherwise a
+ * model writes a candidate, and only a candidate that compiles and matches
+ * the PHP method on every test input is promoted into forja/src and recorded
+ * in forja.lock.json.
  */
 final class Builder
 {
@@ -33,9 +31,10 @@ final class Builder
         private readonly ?Verifier $verifier,
         private readonly Manifest $manifest,
         private readonly LockFile $locks,
-        private readonly string $cacheDir,
+        private readonly Layout $layout,
         private readonly ModelResolver $models,
         private readonly ?string $modelOverride = null,
+        private readonly bool $frozen = false,
         private readonly CodeSanitizer $sanitizer = new CodeSanitizer(),
     ) {
     }
@@ -46,7 +45,7 @@ final class Builder
         return hash('sha256', json_encode([$spec->source, $spec->context, $spec->params, $spec->returnKind], JSON_THROW_ON_ERROR));
     }
 
-    /** SHA-256 of everything that determines the generated code: the PHP side, the model and the prompt. */
+    /** SHA-256 of everything that determines the generated code: the PHP side, the model, the prompt, the runtime. */
     public function hash(MethodSpec $spec): string
     {
         return hash('sha256', json_encode([
@@ -54,6 +53,7 @@ final class Builder
             $this->model($spec),
             PromptBuilder::VERSION,
             PromptBuilder::SYSTEM,
+            Signature::usesRuntime($spec->params, $spec->returnKind) ? PromptBuilder::runtimeApi() : null,
         ], JSON_THROW_ON_ERROR));
     }
 
@@ -63,18 +63,18 @@ final class Builder
     }
 
     /** What build() would do for this method, without doing it. */
-    public function plan(MethodSpec $spec): string
+    public function plan(MethodSpec $spec, bool $force = false): string
     {
         if ($spec->unsupported !== null) {
             return 'unsupported: ' . $spec->unsupported;
         }
-        if ($this->locks->get($spec->key()) !== null) {
-            return 'locked: reuse the frozen C source';
-        }
         try {
-            $cached = $spec->deterministic && is_file("{$this->cacheDir}/src/{$this->hash($spec)}.c");
+            $lock = $this->reusable($spec, $force);
+            if ($lock !== null) {
+                return ($lock['locked'] ?? false) ? 'locked: reuse ' . $lock['source'] : 'reuse ' . $lock['source'];
+            }
 
-            return $cached ? 'cached: reuse the generated C source' : 'generate with ' . $this->model($spec);
+            return $this->frozen ? 'missing: no verified C source, and --frozen forbids generating one' : 'generate with ' . $this->model($spec);
         } catch (GenerationException $e) {
             return 'failed: ' . $e->getMessage();
         }
@@ -110,19 +110,42 @@ final class Builder
     }
 
     /**
+     * The lock entry whose committed source should be used as is, if there is one.
+     *
+     * @return array<string, mixed>|null
+     */
+    private function reusable(MethodSpec $spec, bool $force): ?array
+    {
+        $lock = $this->locks->get($spec->key());
+        if ($lock === null || !is_file($this->layout->dir . '/' . $lock['source'])) {
+            return null;
+        }
+        if ($lock['locked'] ?? false) {
+            return $lock;
+        }
+        if ($lock['phpHash'] !== $this->phpHash($spec)) {
+            return null; // the PHP method changed: this translation belongs to an older version of it
+        }
+
+        // An unchanged method keeps its translation, even if the default model or the prompt has moved on:
+        // regenerating would only produce different bytes for the same behaviour. --force asks for that explicitly.
+        return $this->frozen || (!$force && $spec->deterministic) ? $lock : null;
+    }
+
+    /**
      * @param array<string, mixed> $entry
      * @return array<string, mixed>
      */
     private function buildSupported(MethodSpec $spec, array $entry, bool $force): array
     {
         $key = $spec->key();
-        $lock = $this->locks->get($key);
+        $this->layout->prepare();
+        $lock = $this->reusable($spec, $force);
         $hash = $lock['hash'] ?? $this->hash($spec);
         $signature = Signature::fromSpec($spec, $hash);
-        $sourcePath = "{$this->cacheDir}/src/$hash.c";
 
         $entry = [
-            'locked' => $lock !== null,
+            'locked' => (bool) ($lock['locked'] ?? false),
             'hash' => $hash,
             'phpHash' => $this->phpHash($spec),
             'model' => $lock['model'] ?? $this->model($spec),
@@ -131,74 +154,109 @@ final class Builder
             'params' => $spec->params,
             'return' => $spec->returnKind,
             'ranges' => $spec->ranges,
-            'csource' => $sourcePath,
+            'examples' => $spec->examples,
         ] + $entry;
 
         if ($lock !== null) {
-            if (!is_file($sourcePath)) {
-                throw new GenerationException("locked C source {$lock['source']} is missing; restore it or run --unlock=$key");
-            }
+            $sourcePath = $this->layout->dir . '/' . $lock['source'];
+            $entry['cached'] = true;
             if ($lock['header'] !== $entry['header']) {
-                return ['status' => Manifest::REJECTED, 'message' => "the method's signature changed since it was locked; run --unlock=$key to regenerate"] + $entry;
+                return ['status' => Manifest::REJECTED, 'csource' => $sourcePath,
+                    'message' => "the method's signature changed since it was locked; run --unlock=$key to regenerate"] + $entry;
             }
-        } elseif ($force || !$spec->deterministic || !is_file($sourcePath)) {
+        } elseif ($this->frozen) {
+            return ['status' => Manifest::MISSING,
+                'message' => 'no verified C source for this version of the method; run `forja` on a development machine and commit forja/'] + $entry;
+        } else {
+            $sourcePath = $this->layout->candidatePath($hash);
             $source = $this->generator->generate($spec, $signature, $entry['model']);
             if (!is_dir(dirname($sourcePath))) {
                 mkdir(dirname($sourcePath), 0775, true);
             }
             file_put_contents($sourcePath, rtrim($source) . "\n" . $signature->epilogue());
-        } else {
-            $entry['cached'] = true;
         }
+        $entry['csource'] = $sourcePath;
 
         // The library is named after the C text and the toolchain, so a hand-edited source or new flags rebuild it.
         $source = (string) file_get_contents($sourcePath);
+        $sha = hash('sha256', $source);
         $libId = substr(hash('sha256', $source . "\0" . $this->compiler->id()), 0, 32);
         $entry['libId'] = $libId;
-        $entry['lib'] = "{$this->cacheDir}/lib/$libId." . CCompiler::libraryExtension();
+        $entry['lib'] = $this->layout->libDir() . "/$libId." . CCompiler::libraryExtension();
         $entry['scope'] = 'forja_' . $libId;
-        $entry['hfile'] = "{$this->cacheDir}/lib/$libId.h";
+        $entry['hfile'] = $this->layout->libDir() . "/$libId.h";
 
         $previous = $this->manifest->get($key);
-        if ($previous !== null && ($previous['libId'] ?? null) === $libId && ($previous['phpHash'] ?? null) === $entry['phpHash']
-            && ($previous['ranges'] ?? null) === $entry['ranges'] && is_file($entry['lib']) && is_file($entry['hfile'])
-            && in_array($previous['status'], [Manifest::VERIFIED, Manifest::REJECTED], true)) {
+        $verdictStands = $previous !== null && ($previous['libId'] ?? null) === $libId && ($previous['phpHash'] ?? null) === $entry['phpHash']
+            && ($previous['ranges'] ?? null) === $entry['ranges'] && ($previous['examples'] ?? null) === $entry['examples']
+            && is_file($entry['lib']) && is_file($entry['hfile'])
+            && in_array($previous['status'], [Manifest::VERIFIED, Manifest::REJECTED], true);
+
+        if ($verdictStands) {
             // Same C, same PHP, same toolchain: the earlier verdict still stands.
-            return $this->lockIfRequested($spec, ['status' => $previous['status'], 'message' => $previous['message'], 'cached' => true] + $entry);
+            $entry = ['status' => $previous['status'], 'message' => $previous['message']] + $entry;
+        } else {
+            $this->sanitizer->check($source, $signature->modelSymbol());
+            if (!is_file($entry['lib'])) {
+                $this->compiler->compile($sourcePath, $entry['lib']);
+            }
+            file_put_contents($entry['hfile'], sprintf("#define FFI_SCOPE \"%s\"\n#define FFI_LIB \"%s\"\n%s\n", $entry['scope'], $entry['lib'], $entry['header']));
+
+            if ($this->verifier === null) {
+                return ['status' => Manifest::UNVERIFIED, 'message' => 'verification disabled; the source stays in forja/build/candidates'] + $entry;
+            }
+            $result = $this->verifier->verify($entry);
+            $entry = ['status' => $result->ok ? Manifest::VERIFIED : Manifest::REJECTED, 'message' => $result->message] + $entry;
         }
 
-        $this->sanitizer->check($source, $signature->symbol);
-        if (!is_file($entry['lib'])) {
-            $this->compiler->compile($sourcePath, $entry['lib']);
-        }
-        file_put_contents($entry['hfile'], sprintf(
-            "#define FFI_SCOPE \"%s\"\n#define FFI_LIB \"%s\"\n%s\n",
-            $entry['scope'],
-            $entry['lib'],
-            $entry['header']
-        ));
+        if ($entry['status'] !== Manifest::VERIFIED) {
+            if ($lock !== null) {
+                $entry['message'] .= ($entry['locked'] ? " (C source is locked; fix {$lock['source']} or run --unlock=$key)" : " ({$lock['source']})");
+            } else {
+                $entry['message'] .= ' (candidate kept in ' . $sourcePath . ')';
+            }
 
-        if ($this->verifier === null) {
-            return ['status' => Manifest::UNVERIFIED, 'message' => 'verification disabled'] + $entry;
-        }
-        $result = $this->verifier->verify($entry);
-        $message = $result->message;
-        if (!$result->ok && $lock !== null) {
-            $message .= " (C source is locked; fix {$lock['source']} or run --unlock=$key)";
+            return $entry;
         }
 
-        return $this->lockIfRequested($spec, ['status' => $result->ok ? Manifest::VERIFIED : Manifest::REJECTED, 'message' => $message] + $entry);
+        return $this->promote($spec, $entry, $lock, $source, $sha);
     }
 
     /**
+     * Verified: the source becomes part of the project.
+     *
      * @param array<string, mixed> $entry
+     * @param array<string, mixed>|null $lock
      * @return array<string, mixed>
      */
-    private function lockIfRequested(MethodSpec $spec, array $entry): array
+    private function promote(MethodSpec $spec, array $entry, ?array $lock, string $source, string $sha): array
     {
-        if ($spec->lock && !$entry['locked'] && $entry['status'] === Manifest::VERIFIED) {
-            $this->locks->lock($spec->key(), $entry);
-            $entry['locked'] = true;
+        $name = $lock['source'] ?? $this->layout->sourceName($spec->key());
+        $target = $this->layout->dir . '/' . $name;
+        if ($lock === null) {
+            if (!is_dir(dirname($target))) {
+                mkdir(dirname($target), 0775, true);
+            }
+            file_put_contents($target, $source);
+        } elseif ($lock['sha256'] !== $sha) {
+            $entry['message'] .= ' (source was edited by hand; checksum updated)';
+        }
+        $entry['csource'] = $target;
+        $entry['locked'] = $entry['locked'] || $spec->lock;
+
+        if (!$this->frozen) {
+            $this->locks->put($spec->key(), [
+                'source' => $name,
+                'sha256' => $sha,
+                'hash' => $entry['hash'],
+                'phpHash' => $lock !== null && ($lock['locked'] ?? false) ? $lock['phpHash'] : $entry['phpHash'],
+                'header' => $entry['header'],
+                'model' => $entry['model'],
+                'locked' => $entry['locked'],
+            ]);
+        } elseif ($lock !== null && $lock['sha256'] !== $sha) {
+            // A frozen build must use exactly what was committed.
+            return ['status' => Manifest::REJECTED, 'message' => "{$lock['source']} does not match the checksum in forja.lock.json"] + $entry;
         }
 
         return $entry;

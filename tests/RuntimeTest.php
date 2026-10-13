@@ -40,6 +40,32 @@ final class RuntimeTest extends PipelineTestCase
         self::assertSame([], $run['logs']);
     }
 
+    public function testAssociativeArraysAndQueryRowsCrossTheBoundary(): void
+    {
+        foreach (['wordCounts', 'totalsByCustomer', 'orDefault'] as $method) {
+            self::assertSame(Manifest::VERIFIED, $this->build($method)['status']);
+        }
+        $this->publish();
+
+        $run = $this->runApp([
+            ['wordCounts', ['to be or not to be']],
+            ['totalsByCustomer', [[
+                ['customer' => 'ann', 'amount' => 10.5, 'qty' => 2],
+                ['customer' => 'bob', 'amount' => 1.25, 'qty' => 4],
+                ['customer' => 'ann', 'amount' => 0.5, 'qty' => 1],
+            ]]],
+            ['orDefault', [null, 'none']],
+            // An amount that arrives as a string, as some database drivers return decimals: C declines, PHP computes.
+            ['totalsByCustomer', [[['customer' => 'ann', 'amount' => '10.5', 'qty' => 2]]]],
+        ]);
+
+        self::assertSame(['to' => 2, 'be' => 2, 'or' => 1, 'not' => 1], $run['results'][0]['value']);
+        self::assertSame(['ann' => 21.5, 'bob' => 5], $run['results'][1]['value']);
+        self::assertSame('none', $run['results'][2]['value']);
+        self::assertSame(['ann' => 21], $run['results'][3]['value']);
+        self::assertSame(['native' => 3, 'fallback' => 1], $run['stats']);
+    }
+
     public function testGuardedCopyKeepsFileLineAndDirConstants(): void
     {
         $this->build('sumSquares');
@@ -109,7 +135,7 @@ final class RuntimeTest extends PipelineTestCase
     {
         $this->build('sumSquares');
         $this->publish();
-        $runtime = $this->cacheDir . '/runtime.php';
+        $runtime = $this->layout->buildDir() . '/runtime.php';
         // Same effect as editing Sample.php after the build: the recorded mtime no longer matches.
         file_put_contents($runtime, preg_replace("/'mtime' => (\d+)/", "'mtime' => 1", (string) file_get_contents($runtime)));
 
@@ -144,7 +170,7 @@ final class RuntimeTest extends PipelineTestCase
         $this->publish();
         $calls = json_encode([['sumSquares', [10]], ['caesar', ['abc', 1]]]);
         $app = dirname(__DIR__) . '/tests/Support/app.php';
-        $env = ['FORJA_CACHE_DIR' => $this->cacheDir];
+        $env = ['FORJA_DIR' => $this->dir];
 
         // PHP's default: FFI only from preloaded code. Nothing is preloaded, so PHP runs and says why.
         $default = json_decode((new Server($app, ['ffi.enable=preload'], $env))->post($calls), true);
@@ -154,7 +180,7 @@ final class RuntimeTest extends PipelineTestCase
         self::assertStringContainsString('opcache.preload', $default['logs'][0]);
 
         // Recommended production setup: keep ffi.enable=preload and preload the generated script.
-        $preload = ['ffi.enable=preload', 'opcache.enable=1', 'opcache.enable_cli=1', "opcache.preload={$this->cacheDir}/preload.php"];
+        $preload = ['ffi.enable=preload', 'opcache.enable=1', 'opcache.enable_cli=1', "opcache.preload={$this->layout->buildDir()}/preload.php"];
         $preloaded = json_decode((new Server($app, $preload, $env))->post($calls), true);
         self::assertSame([385, 'bcd'], array_column($preloaded['results'], 'value'));
         self::assertSame(['native' => 2, 'fallback' => 0], $preloaded['stats'], implode("\n", $preloaded['logs']));

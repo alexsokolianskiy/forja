@@ -2,8 +2,4 @@
 /composer.lock
 /.phpunit.cache/
 /benchmarks/.cache/
-/storage/c_cache/lib/
-/storage/c_cache/php/
-/storage/c_cache/manifest.json
-/storage/c_cache/runtime.php
-/storage/c_cache/preload.php
+/forja/build/

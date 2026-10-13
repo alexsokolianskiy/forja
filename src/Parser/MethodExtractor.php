@@ -22,7 +22,7 @@ use PhpParser\PrettyPrinter\Standard;
  */
 final class MethodExtractor
 {
-    private const ATTRIBUTE_ARGS = ['model', 'deterministic', 'ranges', 'lock'];
+    private const ATTRIBUTE_ARGS = ['model', 'deterministic', 'ranges', 'lock', 'examples'];
 
     private readonly NodeFinder $finder;
     private readonly Standard $printer;
@@ -112,16 +112,15 @@ final class MethodExtractor
             if ($param->byRef || $param->variadic) {
                 $unsupported ??= "parameter \$$name is by-reference or variadic";
             } else {
-                $kind = $this->kindOf($param->type, $this->docType($doc, '/@param\s+(\S+)\s+\$' . preg_quote($name, '/') . '\b/'));
-                $unsupported ??= $kind === null
-                    ? "parameter \$$name needs a type of int, float, bool, string, or array with an int[]/float[]/int[][]/float[][] docblock"
-                    : null;
+                $kind = $this->kindOf($param->type, $this->docType($doc, '@param', $name));
+                $unsupported ??= $kind === null ? "parameter \$$name is an object, callable or other type that has no C form" : null;
             }
-            $params[] = ['name' => $name, 'kind' => $kind ?? 'int'];
+            $params[] = ['name' => $name, 'kind' => $kind[0] ?? 'int'] + (isset($kind[1]) ? ['shape' => $kind[1]] : []);
         }
 
-        $returnKind = $this->kindOf($method->returnType, $this->docType($doc, '/@return\s+(\S+)/'), true);
-        $unsupported ??= $returnKind === null ? 'return type must be int, float, bool, string, void, or a documented int/float array' : null;
+        $return = $this->kindOf($method->returnType, $this->docType($doc, '@return'), true);
+        $unsupported ??= $return === null ? 'the return type is an object or other type that has no C form' : null;
+        $returnKind = $return[0] ?? null;
 
         $context = '';
         if ($unsupported === null) {
@@ -140,6 +139,7 @@ final class MethodExtractor
             deterministic: $options['deterministic'] ?? true,
             ranges: $options['ranges'] ?? [],
             lock: $options['lock'] ?? false,
+            examples: $options['examples'] ?? [],
             auto: $attribute === null,
             unsupported: $unsupported,
         );
@@ -166,35 +166,91 @@ final class MethodExtractor
         return $options;
     }
 
-    private function docType(string $doc, string $pattern): ?string
+    /**
+     * The type written after a docblock tag. Types may contain spaces inside brackets
+     * (array{customer: string, amount: float}), so this reads up to the first space outside them.
+     *
+     * @param string $tag '@return', or '@param' together with the parameter name to look for
+     */
+    private function docType(string $doc, string $tag, ?string $param = null): ?string
     {
-        return preg_match($pattern, $doc, $m) ? $m[1] : null;
-    }
-
-    private function kindOf(?Node $type, ?string $docType, bool $isReturn = false): ?string
-    {
-        if (!$type instanceof Node\Identifier) {
-            return null; // untyped, nullable, union or class type
-        }
-        $name = strtolower($type->name);
-        if (in_array($name, ['int', 'float', 'bool', 'string'], true)) {
-            return $name;
-        }
-        if ($name === 'void' && $isReturn) {
-            return 'void';
-        }
-        if ($name !== 'array' || $docType === null) {
-            return null;
-        }
-        $list = '(?:array|list)<(?:int,)?';
-        if (preg_match('/^(?:(int|float)\[\]\[\]|' . $list . $list . '(int|float)>>|' . $list . '(int|float)\[\]>)$/', $docType, $m)) {
-            return ($m[1] ?: $m[2] ?: $m[3]) . '[][]';
-        }
-        if (preg_match('/^(?:(int|float)\[\]|' . $list . '(int|float)>)$/', $docType, $m)) {
-            return ($m[1] ?: $m[2]) . '[]';
+        $offset = 0;
+        while (($at = strpos($doc, $tag, $offset)) !== false) {
+            $offset = $at + strlen($tag);
+            $rest = ltrim(substr($doc, $offset), " \t");
+            $type = '';
+            $depth = 0;
+            for ($i = 0, $n = strlen($rest); $i < $n; $i++) {
+                $c = $rest[$i];
+                if ($c === "\n" || ($depth === 0 && ($c === ' ' || $c === "\t"))) {
+                    break;
+                }
+                $depth += (int) in_array($c, ['<', '{', '('], true) - (int) in_array($c, ['>', '}', ')'], true);
+                $type .= $c;
+            }
+            if ($type === '' || $type[0] === '$') {
+                continue;
+            }
+            if ($param === null || preg_match('/^\s*\$' . preg_quote($param, '/') . '\b/', substr($rest, $i))) {
+                return $type;
+            }
         }
 
         return null;
+    }
+
+    /**
+     * @return array{0: string, 1: ?string}|null [kind, shape of a mixed value], or null when the type is unsupported
+     */
+    private function kindOf(?Node $type, ?string $docType, bool $isReturn = false): ?array
+    {
+        $native = $this->typeString($type);
+        if ($native === null || ($native === 'void' && !$isReturn)) {
+            return null;
+        }
+        if (in_array($native, ['int', 'float', 'bool', 'string', 'void'], true)) {
+            return [$native, null];
+        }
+        if ($native === 'array' && $docType !== null) {
+            $list = '(?:array|list)<(?:int,)?';
+            if (preg_match('/^(?:(int|float)\[\]\[\]|' . $list . $list . '(int|float)>>|' . $list . '(int|float)\[\]>)$/', $docType, $m)) {
+                return [($m[1] ?: $m[2] ?: $m[3]) . '[][]', null];
+            }
+            if (preg_match('/^(?:(int|float)\[\]|' . $list . '(int|float)>)$/', $docType, $m)) {
+                return [($m[1] ?: $m[2]) . '[]', null];
+            }
+        }
+
+        // Anything else made of scalars and arrays travels as a serialized value.
+        return ['mixed', $docType ?? ($native === '' ? 'mixed' : $native)];
+    }
+
+    /**
+     * The declared type as text ('' when there is none), or null when it involves objects,
+     * callables or anything else that cannot cross into C.
+     */
+    private function typeString(?Node $type): ?string
+    {
+        if ($type === null) {
+            return '';
+        }
+        if ($type instanceof Node\Identifier) {
+            $name = strtolower($type->name);
+
+            return in_array($name, ['int', 'float', 'bool', 'string', 'array', 'mixed', 'null', 'false', 'true', 'void'], true) ? $name : null;
+        }
+        if ($type instanceof Node\NullableType) {
+            $inner = $this->typeString($type->type);
+
+            return $inner === null || $inner === 'void' ? null : '?' . $inner;
+        }
+        if ($type instanceof Node\UnionType) {
+            $parts = array_map(fn (Node $t) => $this->typeString($t), $type->types);
+
+            return in_array(null, $parts, true) ? null : implode('|', $parts);
+        }
+
+        return null; // class names, intersections
     }
 
     /**

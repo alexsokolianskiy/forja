@@ -13,6 +13,7 @@ declare(strict_types=1);
 
 use Forja\Benchmarks\Kernels;
 use Forja\Build\Builder;
+use Forja\Build\Layout;
 use Forja\Build\LockFile;
 use Forja\Build\Manifest;
 use Forja\Build\Publisher;
@@ -26,6 +27,9 @@ use Forja\Verify\Comparator;
 use Forja\Verify\Verifier;
 
 require dirname(__DIR__) . '/vendor/autoload.php';
+
+// The workloads are large, and values that go through the runtime are copied once on the way in.
+ini_set('memory_limit', '1G');
 
 const REPEATS = 5;
 
@@ -63,12 +67,21 @@ function workloads(): array
         $text .= (mt_rand(0, 9) === 0 ? ucfirst($word) : $word) . $separators[mt_rand(0, 7)];
     }
 
+    // 200,000 order rows for 5,000 customers, as an ORM would hand them over after ->toArray().
+    $orders = [];
+    for ($i = 0; $i < 200_000; $i++) {
+        $orders[] = ['customer' => 'customer-' . mt_rand(1, 5_000), 'amount' => mt_rand(100, 99_999) / 100, 'qty' => mt_rand(1, 9)];
+    }
+
     return [
         'mandelbrot' => [320, 240, 300],
         'quicksort' => [$ints],
         'matmul' => [$a, $b],
         'repeatedWords' => [$text],
         'repeatedWordsLoop' => [$text],
+        'wordCounts' => [$text],
+        'wordCountsLoop' => [$text],
+        'totalsByCustomer' => [$orders],
     ];
 }
 
@@ -123,15 +136,15 @@ foreach ($argv as $arg) {
 }
 $config = Config::fromFile(dirname(__DIR__) . '/config/forja.php');
 $useModel = $model !== null || (bool) getenv('ANTHROPIC_API_KEY');
-$cacheDir = __DIR__ . '/.cache/' . ($useModel ? 'model' : 'reference');
-$manifest = new Manifest($cacheDir . '/manifest.json');
+$layout = new Layout(__DIR__ . '/.cache/' . ($useModel ? 'model' : 'reference'));
+$manifest = new Manifest($layout->manifestPath());
 $builder = new Builder(
     $useModel ? new ModelRouter($config->providers) : new FixtureGenerator(__DIR__ . '/c'),
     new CCompiler(),
     new Verifier(iterations: 1000),
     $manifest,
-    new LockFile($cacheDir . '/forja.lock.json'),
-    $cacheDir,
+    new LockFile($layout->lockPath()),
+    $layout,
     $config->models(),
     $model,
 );
@@ -140,8 +153,8 @@ foreach ((new MethodExtractor())->extractFromFile(__DIR__ . '/Kernels.php') as $
     $entry = $builder->build($spec);
     printf("  %-18s %-10s %s%s\n", $spec->method, $entry['status'], $useModel ? "[{$entry['model']}] " : '', strtok((string) $entry['message'], "\n"));
 }
-(new Publisher($cacheDir))->publish($manifest);
-Runtime::configure($cacheDir);
+(new Publisher($layout->buildDir()))->publish($manifest);
+Runtime::configure($layout->dir);
 
 // --- measure -----------------------------------------------------------------
 

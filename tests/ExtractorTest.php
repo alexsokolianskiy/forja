@@ -67,6 +67,21 @@ final class ExtractorTest extends TestCase
         self::assertSame('bool', $specs['isPrime']->returnKind);
     }
 
+    public function testEverythingElseMadeOfScalarsAndArraysIsMixed(): void
+    {
+        $specs = $this->specs();
+
+        self::assertSame([['name' => 'n', 'kind' => 'mixed', 'shape' => 'mixed']], $specs['untyped']->params, 'no type at all');
+        self::assertSame('mixed', $specs['wordCounts']->returnKind, 'associative array');
+        self::assertSame('mixed', $specs['totalsByCustomer']->params[0]['kind']);
+        self::assertSame('list<array{customer: string, amount: float, qty: int}>', $specs['totalsByCustomer']->params[0]['shape']);
+        self::assertSame(['?int', 'int|string'], array_column($specs['orDefault']->params, 'shape'), 'nullable and union');
+        self::assertSame('mixed', $specs['orDefault']->returnKind);
+        foreach (['untyped', 'wordCounts', 'totalsByCustomer', 'orDefault', 'dropNegatives'] as $method) {
+            self::assertNull($specs[$method]->unsupported, $method);
+        }
+    }
+
     public function testReadsAttributeArguments(): void
     {
         $specs = $this->specs();
@@ -94,7 +109,7 @@ final class ExtractorTest extends TestCase
 
         self::assertNull($specs['average']->unsupported, '`throw new` is allowed: C reports an error and PHP throws');
         self::assertStringContainsString('reads or writes a property', (string) $specs['usesThis']->unsupported);
-        self::assertStringContainsString('parameter $n needs a type', (string) $specs['untyped']->unsupported);
+        self::assertStringContainsString('parameter $when is an object', (string) $specs['takesObject']->unsupported);
         self::assertStringContainsString('calls user-defined function userHelper()', (string) $specs['callsUserFunction']->unsupported);
         self::assertStringContainsString('produces output', (string) $specs['prints']->unsupported);
     }
@@ -111,6 +126,16 @@ final class ExtractorTest extends TestCase
         self::assertSame("int64_t *$s(const int64_t *m, size_t m_rows, size_t m_cols, int64_t *forja_rows, int64_t *forja_cols, int32_t *forja_err);", $proto('transpose'));
         self::assertSame("int32_t $s(int64_t n, int32_t *forja_err);", $proto('isPrime'));
         self::assertSame("void $s(int64_t n, int32_t *forja_err);", $proto('touch'));
+
+        // Dynamic methods: PHP calls a wrapper, the model writes the _impl behind it.
+        $dynamic = Signature::fromSpec($specs['dropNegatives'], str_repeat('ab', 32));
+        self::assertSame("char *$s(const char *map, size_t map_len, const char *limit, size_t limit_len, int64_t *forja_len, int32_t *forja_err);", $dynamic->prototype());
+        self::assertSame("static fj_val {$s}_impl(fj_ctx *ctx, fj_val map, fj_val limit);", $dynamic->modelPrototype());
+        self::assertStringContainsString("fj_val result = {$s}_impl(ctx, fj_unserialize(ctx, map, map_len), fj_unserialize(ctx, limit, limit_len));", $dynamic->epilogue());
+        $scalar = Signature::fromSpec($specs['untyped'], str_repeat('ab', 32));
+        self::assertSame("int64_t $s(const char *n, size_t n_len, int32_t *forja_err);", $scalar->prototype());
+        self::assertSame("static int64_t {$s}_impl(fj_ctx *ctx, fj_val n);", $scalar->modelPrototype());
+        self::assertSame($proto('dot'), Signature::fromSpec($specs['dot'], str_repeat('ab', 32))->modelPrototype(), 'fixed-layout methods have no wrapper');
 
         $keyword = new Signature('f', [['name' => 'int', 'kind' => 'int'], ['name' => 'default', 'kind' => 'string']], 'int');
         self::assertSame('int64_t f(int64_t int_, const char *default_, size_t default__len, int32_t *forja_err);', $keyword->prototype());
@@ -149,10 +174,12 @@ final class ExtractorTest extends TestCase
     {
         $sanitizer = new CodeSanitizer();
         $sanitizer->check("#include <math.h>\n// system(\"x\") in a comment is fine\ndouble f(double x) { return sqrt(x); }", 'f');
+        $sanitizer->check("#include \"forja_rt.h\"\nstatic fj_val f(fj_ctx *ctx) { return fj_null(); }", 'f');
 
         foreach ([
             "#include <stdio.h>\nint f(void) { return 0; }",
             "#include \"/etc/passwd\"\nint f(void) { return 0; }",
+            "#include \"forja_rt.h\"\nint f(void) { jmp_buf b; return setjmp(b); }",
             'int f(void) { return system("id"); }',
             'int f(void) { __asm__("nop"); return 0; }',
             'int g(void) { return 0; }',

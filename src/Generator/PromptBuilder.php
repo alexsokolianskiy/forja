@@ -10,7 +10,7 @@ use Forja\Parser\MethodSpec;
 final class PromptBuilder
 {
     /** Bump whenever the prompt text changes: it is part of the module hash. */
-    public const VERSION = '2';
+    public const VERSION = '3';
 
     public const SYSTEM = <<<'PROMPT'
         You translate one PHP method into one self-contained C11 translation unit that returns exactly what the PHP method returns.
@@ -53,32 +53,47 @@ final class PromptBuilder
           if you are not certain of a rule, set `*forja_err = 1` for the inputs it affects.
         - String functions operate on bytes unless they are mb_* functions; treat mb_* as UNSUPPORTED.
         - Never read or write outside the bounds you were given, for any input whatsoever.
+
+        Dynamic methods:
+        - When the prototype you are given is `static ... <name>_impl(fj_ctx *ctx, ...)`, the method handles PHP values
+          without a fixed C layout (fj_val: null, bool, int, float, string, or a PHP array). Then:
+            * start with `#include "forja_rt.h"` and implement exactly that `_impl` function; the exported wrapper,
+              argument decoding and result encoding are generated for you;
+            * use only the runtime API you are shown for values, strings and arrays; allocate with fj_alloc and
+              never call malloc or free: all memory is released after the call;
+            * there is no forja_err parameter: call fj_fail(ctx) instead, in every situation listed above for
+              forja_err, and whenever a value does not have the type your code handles. Check `type` before reading
+              a fj_val. Do not emulate PHP's type juggling (numeric strings, int/float/bool/null conversions,
+              loose comparison): on such input call fj_fail(ctx) and let PHP do it;
+            * reading a missing array key is a PHP warning: call fj_fail(ctx), unless the PHP code guards it with
+              isset(), ?? or array_key_exists();
+            * build the result with the same keys, in the same order, with the same value types as PHP would:
+              1 and 1.0 are different results, and so are "1" and 1.
         PROMPT;
+
+    /** The declarations of forja_rt.h that generated code may use. */
+    public static function runtimeApi(): string
+    {
+        static $api = null;
+        if ($api === null) {
+            $header = (string) file_get_contents(dirname(__DIR__, 2) . '/runtime/forja_rt.h');
+            preg_match('~/\* API-BEGIN \*/(.*?)/\* API-END \*/~s', $header, $m);
+            $api = trim($m[1] ?? '');
+        }
+
+        return $api;
+    }
 
     public function user(MethodSpec $spec, Signature $signature): string
     {
-        $context = $spec->context === '' ? '' : <<<TEXT
+        $text = "PHP method ({$spec->key()}):\n\n```php\n{$spec->source}\n```\n";
+        if ($spec->context !== '') {
+            $text .= "\nConstants and helper methods of the same class that it uses:\n\n```php\n{$spec->context}\n```\n";
+        }
+        if ($signature->isDynamic()) {
+            $text .= "\nRuntime API (forja_rt.h):\n\n```c\n" . self::runtimeApi() . "\n```\n";
+        }
 
-            Constants and helper methods of the same class that it uses:
-
-            ```php
-            {$spec->context}
-            ```
-
-            TEXT;
-
-        return <<<TEXT
-            PHP method ({$spec->key()}):
-
-            ```php
-            {$spec->source}
-            ```
-            {$context}
-            Required C prototype:
-
-            ```c
-            {$signature->prototype()}
-            ```
-            TEXT;
+        return $text . "\nRequired C prototype:\n\n```c\n{$signature->modelPrototype()}\n```\n";
     }
 }

@@ -25,8 +25,9 @@ $object = $method->isStatic() ? null : (new ReflectionClass($job['class']))->new
 $inputs = new Forja\Verify\InputGenerator($job['seed'], $job['ranges'] ?? []);
 
 $report = ['ok' => true, 'checked' => 0, 'declined' => 0, 'phpErrors' => 0, 'firstPhpError' => null, 'failure' => null];
-for ($i = 0; $i < $job['iterations']; $i++) {
-    $args = $inputs->generate($job['params'], [0 => 'min', 1 => 'max'][$i] ?? null);
+$examples = $job['examples'] ?? [];
+for ($i = -count($examples); $i < $job['iterations']; $i++) {
+    $args = $i < 0 ? $examples[$i + count($examples)] : $inputs->generate($job['params'], [0 => 'min', 1 => 'max'][$i] ?? null);
 
     $phpError = null;
     try {

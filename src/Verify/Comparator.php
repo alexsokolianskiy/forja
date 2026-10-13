@@ -22,7 +22,8 @@ final class Comparator
             return abs($expected - $actual) <= self::EPSILON * max(1.0, abs($expected), abs($actual));
         }
         if (is_array($expected) && is_array($actual)) {
-            if (count($expected) !== count($actual) || !array_is_list($expected)) {
+            // Same keys, of the same types, in the same order.
+            if (array_keys($expected) !== array_keys($actual)) {
                 return false;
             }
             foreach ($expected as $i => $value) {

@@ -5,18 +5,20 @@ declare(strict_types=1);
 namespace Forja\Build;
 
 /**
- * forja.lock.json: methods whose C source is frozen.
+ * forja.lock.json: one entry per method whose C translation has been verified.
  *
- * A locked method is never sent to a model again, whatever happens to the
- * default model, the prompt or --force. Its C file may also be tuned by hand.
- * It is still compiled and verified against the PHP method on every build, so
- * a lock can never make a stale translation run. Commit this file together
- * with src/.
+ * It plays the role composer.lock plays for dependencies. The C sources in
+ * forja/src and this file are committed; every other machine builds from
+ * exactly those bytes (the sha256 is checked) and never asks a model, so the
+ * code that runs in production is the code that was reviewed.
+ *
+ * An entry with "locked": true is additionally frozen: it is kept even when
+ * the PHP method, the model or the prompt changes, and is only re-verified.
  */
 final class LockFile
 {
     /** @var array<string, array<string, mixed>>|null */
-    private ?array $locks = null;
+    private ?array $entries = null;
 
     public function __construct(private readonly string $path)
     {
@@ -25,12 +27,12 @@ final class LockFile
     /** @return array<string, array<string, mixed>> */
     public function all(): array
     {
-        if ($this->locks === null) {
+        if ($this->entries === null) {
             $data = is_file($this->path) ? json_decode((string) file_get_contents($this->path), true) : null;
-            $this->locks = is_array($data) ? $data : [];
+            $this->entries = is_array($data) ? $data : [];
         }
 
-        return $this->locks;
+        return $this->entries;
     }
 
     /** @return array<string, mixed>|null */
@@ -39,27 +41,35 @@ final class LockFile
         return $this->all()[$key] ?? null;
     }
 
-    /** @param array<string, mixed> $entry a verified manifest entry */
-    public function lock(string $key, array $entry): void
+    /** @param array<string, mixed> $entry */
+    public function put(string $key, array $entry): void
     {
-        $this->all();
-        $this->locks[$key] = [
-            'hash' => $entry['hash'],
-            'source' => 'src/' . $entry['hash'] . '.c',
-            'header' => $entry['header'],
-            'model' => $entry['model'],
-            'lockedAt' => date('Y-m-d'),
-        ];
+        if ($this->get($key) === $entry) {
+            return;
+        }
+        $this->entries[$key] = $entry;
         $this->save();
     }
 
-    public function unlock(string $key): bool
+    public function remove(string $key): bool
     {
         if ($this->get($key) === null) {
             return false;
         }
-        unset($this->locks[$key]);
+        unset($this->entries[$key]);
         $this->save();
+
+        return true;
+    }
+
+    /** @return bool false when the method has no verified translation to lock or unlock */
+    public function setLocked(string $key, bool $locked): bool
+    {
+        $entry = $this->get($key);
+        if ($entry === null) {
+            return false;
+        }
+        $this->put($key, ['locked' => $locked] + $entry);
 
         return true;
     }
@@ -69,7 +79,12 @@ final class LockFile
         if (!is_dir(dirname($this->path))) {
             mkdir(dirname($this->path), 0775, true);
         }
-        ksort($this->locks);
-        file_put_contents($this->path, json_encode($this->locks, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR) . "\n");
+        // Sorted and without timestamps: the same state always produces the same file.
+        ksort($this->entries);
+        foreach ($this->entries as &$entry) {
+            ksort($entry);
+        }
+        unset($entry);
+        file_put_contents($this->path, json_encode($this->entries, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR) . "\n");
     }
 }
